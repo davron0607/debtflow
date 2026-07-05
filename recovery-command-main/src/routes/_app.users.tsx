@@ -27,9 +27,7 @@ function UsersPage() {
 
   const isBankAdmin = currentUser.role === "BANK_ADMIN";
   const users = manageableUsers();
-  const manageableOrgs = isBankAdmin
-    ? db.orgs
-    : db.orgs.filter((o) => o.id === currentUser.orgId);
+  const manageableOrgs = db.orgs.filter((o) => o.id === currentUser.orgId);
 
   const flash = (kind: "ok" | "err", text: string) => {
     setNotice({ kind, text });
@@ -43,7 +41,7 @@ function UsersPage() {
           <h1 className="font-display text-3xl font-bold">Пользователи и роли</h1>
           <p className="text-sm text-muted-foreground">
             {isBankAdmin
-              ? "Как администратор банка вы управляете учётными записями всех подключённых организаций."
+              ? "Вы управляете учётными записями банка. Пользователи агентств и юр. фирм администрируются их менеджерами."
               : "Как менеджер вы управляете учётными записями своей организации."}
           </p>
         </div>

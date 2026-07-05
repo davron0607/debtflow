@@ -109,16 +109,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [currentUser.role],
   );
 
+  // Институциональная граница: каждая организация управляет только своими
+  // учётными записями. Банк-админ не администрирует пользователей агентств.
   const manageableUsers = useCallback((): User[] => {
-    if (currentUser.role === "BANK_ADMIN") return db.users;
-    if (currentUser.role === "MANAGER") return db.users.filter((u) => u.orgId === currentUser.orgId);
+    if (currentUser.role === "BANK_ADMIN" || currentUser.role === "MANAGER")
+      return db.users.filter((u) => u.orgId === currentUser.orgId);
     return [];
   }, [db.users, currentUser]);
 
   const _canManageOrg = useCallback(
     (orgId: string) =>
-      currentUser.role === "BANK_ADMIN" ||
-      (currentUser.role === "MANAGER" && orgId === currentUser.orgId),
+      (currentUser.role === "BANK_ADMIN" || currentUser.role === "MANAGER") &&
+      orgId === currentUser.orgId,
     [currentUser],
   );
 
