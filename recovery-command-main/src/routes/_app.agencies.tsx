@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useStore } from "@/lib/store/store";
 import { fmtUSD } from "@/lib/format";
+import { agencyVerdict } from "@/lib/decision-engine";
 
 export const Route = createFileRoute("/_app/agencies")({
   component: AgenciesPage,
@@ -66,6 +67,31 @@ function AgenciesPage() {
               <Bar label="SLA" pct={r.slaScore} tone="bg-success" />
               <Bar label="Контакты" pct={Math.min(100, r.contactDiscipline)} tone="bg-money" />
             </div>
+            {(() => {
+              const v = agencyVerdict(db, r.org);
+              const cls =
+                v.tone === "success"
+                  ? "border-success/40 bg-success/10 text-success"
+                  : v.tone === "warning"
+                  ? "border-money/40 bg-money/10 text-money"
+                  : "border-destructive/40 bg-destructive/10 text-destructive";
+              return (
+                <div className={`mt-4 flex items-center justify-between gap-3 rounded-md border p-3 text-sm ${cls}`}>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">Решение</div>
+                    {v.verdict}
+                  </div>
+                  {v.action === "REASSIGN" && (
+                    <Link
+                      to="/assignments"
+                      className="shrink-0 rounded-md border border-current px-3 py-1.5 text-xs font-medium hover:opacity-80"
+                    >
+                      Переназначить
+                    </Link>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>

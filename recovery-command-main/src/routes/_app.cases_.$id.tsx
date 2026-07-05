@@ -18,6 +18,7 @@ import { fmtUSD, fmtUZS, fmtDateTime, fmtDate } from "@/lib/format";
 import { STATUS_LABEL, allowedTransitions, statusTone } from "@/lib/state-machine";
 import { StatusBadge } from "@/components/status-badge";
 import { LifecycleSpine } from "@/components/lifecycle-spine";
+import { DecisionPanel } from "@/components/decision-panel";
 import type { CaseStatus, DocumentKind } from "@/lib/store/types";
 
 export const Route = createFileRoute("/_app/cases_/$id")({
@@ -138,6 +139,8 @@ function CaseDetail() {
             )}
           </div>
         </div>
+
+        <DecisionPanel c={c} />
 
         {/* State transitions */}
         <div className="mt-4 flex flex-wrap gap-2">

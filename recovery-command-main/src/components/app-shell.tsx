@@ -18,36 +18,67 @@ import {
   LogOut,
   Smartphone,
   MapPinned,
+  Inbox,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { ROLE_LABEL, type UserRole } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: UserRole[]; badge?: "V2" };
+type NavGroup = { title: string; items: NavItem[] };
 
-const NAV: NavItem[] = [
-  { to: "/control-tower", label: "Командный пульт", icon: LayoutDashboard, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
-  { to: "/portfolio/upload", label: "Загрузка портфеля", icon: Upload, roles: ["BANK_ADMIN"] },
-  { to: "/cases", label: "Все дела", icon: Briefcase, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
-  { to: "/my-cases", label: "Мои дела", icon: ClipboardList, roles: ["COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"] },
-  { to: "/field", label: "Полевой режим", icon: Smartphone, roles: ["COLLECTOR"] },
-  { to: "/tracking", label: "GPS-мониторинг", icon: MapPinned, roles: ["BANK_ADMIN", "BANK_LEGAL", "MANAGER"] },
-  { to: "/assignments", label: "Назначения / Маркет", icon: Users, roles: ["BANK_ADMIN"] },
-  { to: "/agencies", label: "Аналитика агентств", icon: Building2, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
-  { to: "/roi", label: "ROI калькулятор", icon: Calculator, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
-  { to: "/court", label: "Суд (ручное ведение)", icon: Scale, roles: ["BANK_ADMIN", "BANK_LEGAL", "LEGAL_FIRM"] },
-  { to: "/transfers", label: "Перевод средств", icon: Wallet, roles: ["COLLECTOR", "MANAGER", "ACCOUNTANT", "BANK_ADMIN"] },
-  { to: "/users", label: "Пользователи и роли", icon: UserCog, roles: ["BANK_ADMIN", "MANAGER"] },
-  { to: "/audit", label: "Аудит-журнал", icon: ScrollText },
-  { to: "/mib", label: "МИБ / БПИ", icon: Radio, badge: "V2" },
-  { to: "/integrations", label: "Интеграции", icon: Plug, badge: "V2" },
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: "Управление",
+    items: [
+      { to: "/control-tower", label: "Контроль-центр", icon: LayoutDashboard, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
+      { to: "/queue", label: "Очередь задач", icon: Inbox },
+    ],
+  },
+  {
+    title: "Дела",
+    items: [
+      { to: "/cases", label: "Все дела", icon: Briefcase, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
+      { to: "/my-cases", label: "Мои дела", icon: ClipboardList, roles: ["COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"] },
+      { to: "/field", label: "Полевой режим", icon: Smartphone, roles: ["COLLECTOR"] },
+      { to: "/portfolio/upload", label: "Загрузка портфеля", icon: Upload, roles: ["BANK_ADMIN"] },
+    ],
+  },
+  {
+    title: "Решения",
+    items: [
+      { to: "/roi", label: "Центр решений (ROI)", icon: Calculator, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
+      { to: "/assignments", label: "Назначения / Маркет", icon: Users, roles: ["BANK_ADMIN"] },
+      { to: "/court", label: "Суд (ручное ведение)", icon: Scale, roles: ["BANK_ADMIN", "BANK_LEGAL", "LEGAL_FIRM"] },
+      { to: "/transfers", label: "Перевод средств", icon: Wallet, roles: ["COLLECTOR", "MANAGER", "ACCOUNTANT", "BANK_ADMIN"] },
+    ],
+  },
+  {
+    title: "Эффективность",
+    items: [
+      { to: "/agencies", label: "Решения по агентствам", icon: Building2, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
+      { to: "/tracking", label: "Эффективность коллекторов", icon: MapPinned, roles: ["BANK_ADMIN", "BANK_LEGAL", "MANAGER"] },
+    ],
+  },
+  {
+    title: "Администрирование",
+    items: [
+      { to: "/users", label: "Пользователи и роли", icon: UserCog, roles: ["BANK_ADMIN", "MANAGER"] },
+      { to: "/audit", label: "Аудит-журнал", icon: ScrollText },
+      { to: "/mib", label: "МИБ / БПИ", icon: Radio, badge: "V2" },
+      { to: "/integrations", label: "Интеграции", icon: Plug, badge: "V2" },
+    ],
+  },
 ];
 
 export function AppShell() {
   const { currentUser, setCurrentUserId, db, logout } = useStore();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
-  const visibleNav = NAV.filter((n) => !n.roles || n.roles.includes(currentUser.role));
+  const visibleGroups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((n) => !n.roles || n.roles.includes(currentUser.role)),
+  })).filter((g) => g.items.length > 0);
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -59,33 +90,42 @@ export function AppShell() {
           </div>
           <div className="leading-tight">
             <div className="font-display text-sm font-bold text-sidebar-foreground">DebtFlow</div>
-            <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">Единая ОС взыскания</div>
+            <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">Recovery Decision Platform</div>
           </div>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-          {visibleNav.map((item) => {
-            const active = pathname === item.to || pathname.startsWith(item.to + "/");
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                  active && "bg-sidebar-accent text-sidebar-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="flex-1">{item.label}</span>
-                {item.badge && (
-                  <span className="rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/70">
-                    {item.badge}
-                  </span>
-                )}
-                {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 space-y-3 overflow-y-auto p-2">
+          {visibleGroups.map((group) => (
+            <div key={group.title}>
+              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                {group.title}
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = pathname === item.to || pathname.startsWith(item.to + "/");
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                        active && "bg-sidebar-accent text-sidebar-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && (
+                        <span className="rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/70">
+                          {item.badge}
+                        </span>
+                      )}
+                      {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="border-t border-sidebar-border p-3 text-[10px] text-sidebar-foreground/60">
           Нейтральный слой координации.<br />Принуждение — только МИБ.

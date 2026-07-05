@@ -32,9 +32,9 @@ function TrackingPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold">GPS-мониторинг выездов</h1>
+        <h1 className="font-display text-3xl font-bold">Эффективность коллекторов</h1>
         <p className="text-sm text-muted-foreground">
-          Контроль полевых коллекторов: маршруты, результаты выездов и эффективность.
+          Продуктивность полевой работы: выезды, контактность, результат. GPS — вспомогательный контроль.
           {currentUser.role === "MANAGER" ? " Видны только коллекторы вашей организации." : ""}
         </p>
       </div>

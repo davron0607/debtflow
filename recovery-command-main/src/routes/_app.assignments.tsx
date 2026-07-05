@@ -4,6 +4,7 @@ import { ArrowRight, Users } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { fmtUSD } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { suggestAgencies } from "@/lib/decision-engine";
 
 export const Route = createFileRoute("/_app/assignments")({
   component: AssignmentsPage,
@@ -99,6 +100,47 @@ function AssignmentsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6">
             <h3 className="mb-3 font-display text-lg font-semibold">Назначение</h3>
+
+            {(() => {
+              const c = db.cases.find((x) => x.id === selectedCase);
+              if (!c) return null;
+              const ranked = suggestAgencies(db, c);
+              const best = ranked[0];
+              return (
+                <div className="mb-4 rounded-md border border-primary/40 bg-primary/5 p-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                    Рекомендация Decision Engine
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-sm font-medium">{best.org.name}</span>
+                    <span className="font-mono text-xs">{best.score}%</span>
+                  </div>
+                  <ul className="mt-1 text-[11px] text-muted-foreground">
+                    {best.reasons.map((r, i) => (
+                      <li key={i}>✓ {r}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+                    {ranked.slice(1).map((a) => (
+                      <div key={a.org.id} className="flex justify-between">
+                        <span>{a.org.name}</span>
+                        <span className="font-mono">{a.score}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setTargetOrg(best.org.id);
+                      if (!reason.trim()) setReason(`Decision Engine: ${best.reasons.join("; ")}`);
+                    }}
+                    className="mt-2 w-full rounded-md border border-primary/50 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                  >
+                    Принять рекомендацию
+                  </button>
+                </div>
+              );
+            })()}
+
             <label className="mb-1 block text-xs text-muted-foreground">Кому</label>
             <select value={targetOrg} onChange={(e) => setTargetOrg(e.target.value)} className="mb-3 w-full rounded border border-input bg-background p-2 text-sm">
               <option value="">Выберите организацию…</option>

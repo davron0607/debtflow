@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shield, LogIn } from "lucide-react";
 import { useStore, DEMO_PASSWORD } from "@/lib/store/store";
@@ -15,10 +15,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  if (isAuthenticated) {
-    router.navigate({ to: "/control-tower" });
-    return null;
-  }
+  if (isAuthenticated) return <Navigate to="/control-tower" />;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();

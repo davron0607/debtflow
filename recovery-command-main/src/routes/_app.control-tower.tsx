@@ -15,14 +15,16 @@ import { fmtUSD, dpdBucket } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/state-machine";
 import { StatusBadge } from "@/components/status-badge";
 import type { CaseStatus } from "@/lib/store/types";
+import { portfolioBrief, suggestAgencies, agencyVerdict } from "@/lib/decision-engine";
 
 export const Route = createFileRoute("/_app/control-tower")({
   component: ControlTower,
 });
 
 function ControlTower() {
-  const { db, scopedCases, currentUser } = useStore();
+  const { db, scopedCases, currentUser, assignCase } = useStore();
   const cases = scopedCases();
+  const brief = useMemo(() => portfolioBrief(db, cases), [db, cases]);
 
   const totals = useMemo(() => {
     const totalUSD = cases.reduce((s, c) => s + c.amountUSD, 0);
@@ -104,9 +106,9 @@ function ControlTower() {
           <div className="text-xs uppercase tracking-widest text-muted-foreground">
             {currentUser.role === "BANK_ADMIN" ? "Администратор банка" : "Юрист банка"} · Tenge Bank
           </div>
-          <h1 className="mt-1 font-display text-3xl font-bold">Командный пульт</h1>
+          <h1 className="mt-1 font-display text-3xl font-bold">Центр управления</h1>
           <p className="text-sm text-muted-foreground">
-            Нейтральный слой координации между банком, коллекторами, юр. фирмами и МИБ.
+            Самые ценные решения на сегодня — данные ниже, действия сначала.
           </p>
         </div>
         <Link
@@ -117,6 +119,138 @@ function ControlTower() {
         </Link>
       </div>
 
+      {/* Приоритеты сегодня */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Priority to="/queue" hot label="Требуют действия" value={String(brief.needAction)} suffix="дел" />
+        <Priority to="/court" label="Слушания ≤ 3 дней" value={String(brief.hearingsSoon)} suffix="суд" />
+        <Priority to="/queue" label="Обещания нарушены" value={String(brief.promisesBroken)} suffix="дел" />
+        <Priority to="/queue" label="Под риском" value={fmtUSD(brief.atRisk)} suffix="P(взыск) < 35%" />
+        <Priority to="/queue" label="Нарушения SLA" value={String(brief.slaBreaches)} suffix="таймеров" />
+      </div>
+
+      {/* Рекомендуемые действия */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-lg border border-border bg-surface p-5 lg:col-span-2">
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Рекомендуемые действия
+          </h2>
+          <div className="space-y-2">
+            {(() => {
+              const rows: { key: string; title: string; sub: string; btn: React.ReactNode }[] = [];
+              const g = (k: Parameters<typeof brief.byAction.get>[0]) => brief.byAction.get(k);
+              const assign = g("ASSIGN");
+              if (assign && currentUser.role === "BANK_ADMIN") {
+                rows.push({
+                  key: "assign",
+                  title: `Назначить ${assign.cases.length} новых дел агентствам`,
+                  sub: `Ожидаемое взыскание +${fmtUSD(assign.expected)}`,
+                  btn: (
+                    <button
+                      onClick={() => {
+                        assign.cases.forEach((c) => {
+                          const best = suggestAgencies(db, c)[0];
+                          if (best) assignCase(c.id, best.org.id, undefined, `Decision Engine: ${best.reasons.join("; ")}`);
+                        });
+                      }}
+                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    >
+                      Распределить
+                    </button>
+                  ),
+                });
+              }
+              const court = [...(g("SEND_COURT")?.cases ?? []), ...(g("FILE_COURT")?.cases ?? [])];
+              if (court.length)
+                rows.push({
+                  key: "court",
+                  title: `Отправить ${court.length} дел в суд`,
+                  sub: "Пакеты готовы или экономика подтверждена",
+                  btn: <ActionLink to="/queue" label="К очереди" />,
+                });
+              const notary = g("SEND_NOTARY");
+              if (notary)
+                rows.push({
+                  key: "notary",
+                  title: `${notary.cases.length} дел — маршрут через нотариуса`,
+                  sub: `Быстрее и дешевле суда · +${fmtUSD(notary.expected)}`,
+                  btn: <ActionLink to="/queue" label="К очереди" />,
+                });
+              const restr = g("RESTRUCTURE");
+              if (restr)
+                rows.push({
+                  key: "restr",
+                  title: `Реструктуризация для ${restr.cases.length} должников`,
+                  sub: "Суд дороже ожидаемого взыскания",
+                  btn: <ActionLink to="/queue" label="К очереди" />,
+                });
+              const wo = g("WRITE_OFF");
+              if (wo)
+                rows.push({
+                  key: "wo",
+                  title: `Списать ${wo.cases.length} нерентабельных дел`,
+                  sub: `Освободить ресурсы: возврат маловероятен`,
+                  btn: <ActionLink to="/queue" label="Проверить" />,
+                });
+              return rows.map((r) => (
+                <div key={r.key} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-2 p-3">
+                  <div>
+                    <div className="text-sm font-medium">{r.title}</div>
+                    <div className="text-xs text-muted-foreground">{r.sub}</div>
+                  </div>
+                  {r.btn}
+                </div>
+              ));
+            })()}
+            {brief.byAction.size === 0 && (
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                Решений не требуется — портфель идёт по плану.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Insights */}
+        <div className="rounded-lg border border-border bg-surface p-5">
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Инсайты Decision Engine
+          </h2>
+          <ul className="space-y-2 text-sm">
+            {db.orgs
+              .filter((o) => o.type === "COLLECTOR" || o.type === "LEGAL_FIRM")
+              .map((o) => {
+                const v = agencyVerdict(db, o);
+                return (
+                  <li key={o.id} className="flex items-start gap-2">
+                    <span
+                      className={
+                        "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full " +
+                        (v.tone === "success" ? "bg-success" : v.tone === "warning" ? "bg-money" : "bg-destructive")
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{o.name}:</span>{" "}
+                      <span className="text-muted-foreground">{v.verdict}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            <li className="flex items-start gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              <span>
+                Прогноз взыскания (30 дней):{" "}
+                <span className="font-mono text-money">{fmtUSD(brief.expected30d)}</span>
+              </span>
+            </li>
+          </ul>
+          <Link to="/agencies" className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+            Решения по агентствам <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+
+      <h2 className="mb-3 mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        Аналитика портфеля
+      </h2>
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Kpi icon={Banknote} label="Портфель (USD)" value={fmtUSD(totals.totalUSD)} tone="money" />
@@ -275,6 +409,30 @@ function ControlTower() {
         Совокупная стоимость взыскания (расходы): <span className="font-mono text-money">{fmtUSD(totals.costsUSD)}</span>
       </div>
     </div>
+  );
+}
+
+function Priority({ to, label, value, suffix, hot }: { to: string; label: string; value: string; suffix: string; hot?: boolean }) {
+  return (
+    <Link
+      to={to}
+      className={
+        "rounded-lg border p-4 transition-colors hover:bg-surface-2 " +
+        (hot ? "border-primary/60 bg-primary/5" : "border-border bg-surface")
+      }
+    >
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{hot ? "🔥 " : ""}{label}</div>
+      <div className="mt-1 font-display text-2xl font-bold">{value}</div>
+      <div className="text-[11px] text-muted-foreground">{suffix}</div>
+    </Link>
+  );
+}
+
+function ActionLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link to={to} className="shrink-0 rounded-md border border-primary/50 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10">
+      {label}
+    </Link>
   );
 }
 

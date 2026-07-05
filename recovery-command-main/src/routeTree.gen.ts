@@ -16,6 +16,7 @@ import { Route as AppUsersRouteImport } from './routes/_app.users'
 import { Route as AppTransfersRouteImport } from './routes/_app.transfers'
 import { Route as AppTrackingRouteImport } from './routes/_app.tracking'
 import { Route as AppRoiRouteImport } from './routes/_app.roi'
+import { Route as AppQueueRouteImport } from './routes/_app.queue'
 import { Route as AppMyCasesRouteImport } from './routes/_app.my-cases'
 import { Route as AppMibRouteImport } from './routes/_app.mib'
 import { Route as AppIntegrationsRouteImport } from './routes/_app.integrations'
@@ -61,6 +62,11 @@ const AppTrackingRoute = AppTrackingRouteImport.update({
 const AppRoiRoute = AppRoiRouteImport.update({
   id: '/roi',
   path: '/roi',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQueueRoute = AppQueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyCasesRoute = AppMyCasesRouteImport.update({
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/integrations': typeof AppIntegrationsRoute
   '/mib': typeof AppMibRoute
   '/my-cases': typeof AppMyCasesRoute
+  '/queue': typeof AppQueueRoute
   '/roi': typeof AppRoiRoute
   '/tracking': typeof AppTrackingRoute
   '/transfers': typeof AppTransfersRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/integrations': typeof AppIntegrationsRoute
   '/mib': typeof AppMibRoute
   '/my-cases': typeof AppMyCasesRoute
+  '/queue': typeof AppQueueRoute
   '/roi': typeof AppRoiRoute
   '/tracking': typeof AppTrackingRoute
   '/transfers': typeof AppTransfersRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/mib': typeof AppMibRoute
   '/_app/my-cases': typeof AppMyCasesRoute
+  '/_app/queue': typeof AppQueueRoute
   '/_app/roi': typeof AppRoiRoute
   '/_app/tracking': typeof AppTrackingRoute
   '/_app/transfers': typeof AppTransfersRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/mib'
     | '/my-cases'
+    | '/queue'
     | '/roi'
     | '/tracking'
     | '/transfers'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/mib'
     | '/my-cases'
+    | '/queue'
     | '/roi'
     | '/tracking'
     | '/transfers'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/_app/integrations'
     | '/_app/mib'
     | '/_app/my-cases'
+    | '/_app/queue'
     | '/_app/roi'
     | '/_app/tracking'
     | '/_app/transfers'
@@ -305,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/roi'
       fullPath: '/roi'
       preLoaderRoute: typeof AppRoiRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/queue': {
+      id: '/_app/queue'
+      path: '/queue'
+      fullPath: '/queue'
+      preLoaderRoute: typeof AppQueueRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-cases': {
@@ -405,6 +424,7 @@ interface AppRouteChildren {
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppMibRoute: typeof AppMibRoute
   AppMyCasesRoute: typeof AppMyCasesRoute
+  AppQueueRoute: typeof AppQueueRoute
   AppRoiRoute: typeof AppRoiRoute
   AppTrackingRoute: typeof AppTrackingRoute
   AppTransfersRoute: typeof AppTransfersRoute
@@ -424,6 +444,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppMibRoute: AppMibRoute,
   AppMyCasesRoute: AppMyCasesRoute,
+  AppQueueRoute: AppQueueRoute,
   AppRoiRoute: AppRoiRoute,
   AppTrackingRoute: AppTrackingRoute,
   AppTransfersRoute: AppTransfersRoute,
