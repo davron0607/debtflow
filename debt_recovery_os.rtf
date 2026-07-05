@@ -1,0 +1,396 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Monaco;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue255;\red255\green255\blue254;\red0\green0\blue0;
+\red15\green112\blue1;\red144\green1\blue18;\red0\green0\blue117;\red14\green110\blue109;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c100000;\cssrgb\c100000\c100000\c99608;\cssrgb\c0\c0\c0;
+\cssrgb\c0\c50196\c0;\cssrgb\c63922\c8235\c8235;\cssrgb\c0\c6667\c53333;\cssrgb\c0\c50196\c50196;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 # Debt Recovery OS \'97 Product Requirements Document (V1 MVP)\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **\uc0\u1045 \u1076 \u1080 \u1085 \u1072 \u1103  \u1086 \u1087 \u1077 \u1088 \u1072 \u1094 \u1080 \u1086 \u1085 \u1085 \u1072 \u1103  \u1089 \u1080 \u1089 \u1090 \u1077 \u1084 \u1072  \u1074 \u1079 \u1099 \u1089 \u1082 \u1072 \u1085 \u1080 \u1103 **\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 | | |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Document status** \cf2 \strokec2 |\cf0 \strokec4  Approved for build \'97 V1 MVP \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Version** \cf2 \strokec2 |\cf0 \strokec4  1.0 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Last updated** \cf2 \strokec2 |\cf0 \strokec4  5 July 2026 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Authors** \cf2 \strokec2 |\cf0 \strokec4  CPO (Product) \'b7 CTO (Architecture & Engineering) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Reviewers** \cf2 \strokec2 |\cf0 \strokec4  Head of Collections \'b7 Bank Legal Lead \'b7 Data Protection Officer \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  **Target release** \cf2 \strokec2 |\cf0 \strokec4  V1 MVP \'97 private B2B platform, no government\cf2 \strokec2 -\cf0 \strokec4 system integration \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 0. How to read this document\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 This PRD is co-authored. Sections marked **[CPO]** define *what* we are building and *why it wins*; sections marked **[CTO]** define *how* it is engineered, secured, and made extensible. Where the two intersect (data model, RBAC, integration seam) both signatures apply. V2 items are described as **roadmap**, never as scope \'97 they exist here only so the V1 architecture leaves the right seams.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 1. Executive summary [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Debt Recovery OS is a B2B operating system for managing distressed-debt recovery, used by banks/MFOs, collection agencies, and legal firms in Uzbekistan. It is **not a CRM**. It is a recovery-infrastructure layer that manages the full lifecycle of a debt:\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 >\cf0 \strokec4  **Portfolio \uc0\u8594  Assignment \u8594  Collector activity \u8594  Legal prep \u8594  Court tracking \u8594  MIB tracking \u8594  Recovery / Closure**\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 The platform is a neutral **coordination, analytics and control layer** between bank, collector, legal firm, and (later) the state. It does not replace collectors, lawyers, or MIB (the state Bureau of Compulsory Enforcement). Private collectors and legal firms in Uzbekistan are not state enforcers \'97 they cannot freeze accounts, write off money, restrict travel, restrict property, or self-execute judgments. **The platform tracks and coordinates; enforcement stays with MIB.** Every product decision in this document respects that boundary.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **V1 scope:** a private, multi-tenant platform connecting bank \uc0\u8596  collector \u8596  legal firm with realistic seeded data, role-aware workflows, and working state transitions \'97 with all in-app text in Russian and monetary values shown in USD (and UZS where a case amount is displayed). No government integration is built; the integration boundary exists with mock adapters only.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 2. Problem & opportunity [CPO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 2.1 The problem today\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Banks and MFOs in Uzbekistan carry growing NPL (non-performing loan) portfolios and hand them to a fragmented network of collection agencies and legal firms. Coordination happens over spreadsheets, phone calls, and messenger chats. This creates four structural failures:\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 1. \cf0 \strokec4 **No single source of truth.** A debt's history lives in whoever last touched it. When a lawyer or collector leaves, institutional knowledge and metrics walk out the door.\cb1 \
+\cf2 \cb3 \strokec2 2. \cf0 \strokec4 **No accountability layer.** Banks cannot compare agencies objectively, cannot see where SLA is breached, and cannot audit who did what, when, and with what result.\cb1 \
+\cf2 \cb3 \strokec2 3. \cf0 \strokec4 **Data-quality rot.** Portfolios arrive with missing \uc0\u1055 \u1048 \u1053 \u1060 \u1051 , malformed amounts, and duplicates \'97 errors that surface only after weeks of wasted collection effort.\cb1 \
+\cf2 \cb3 \strokec2 4. \cf0 \strokec4 **Poor capital decisions.** Banks litigate debts that cost more to recover than they return, because nobody models expected recovery against cost-to-recover before filing.\cb1 \
+\
+\cf2 \cb3 \strokec2 ### 2.2 Why now\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Recovery is being professionalized and, increasingly, digitized (E-SUD e-courts, notary \uc0\u1080 \u1089 \u1087 \u1086 \u1083 \u1085 \u1080 \u1090 \u1077 \u1083 \u1100 \u1085 \u1072 \u1103  \u1085 \u1072 \u1076 \u1087 \u1080 \u1089 \u1100 , MIB enforcement). A neutral platform that sits *between* the parties \'97 owning the record, the workflow, and the analytics \'97 becomes the natural coordination layer as those state systems come online. **We win the private-coordination layer first (V1), then plug into the state systems as they mature (V2).**\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ### 2.3 Positioning (must persist in UI copy)\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 The platform is a **neutral coordination, analytics and control layer**. It does not replace collectors, lawyers, or MIB.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Never show a collector "freezing an account." Show them **recording a request** or **tracking a state action**.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Tagline in header/footer: **\'ab\uc0\u1045 \u1076 \u1080 \u1085 \u1072 \u1103  \u1086 \u1087 \u1077 \u1088 \u1072 \u1094 \u1080 \u1086 \u1085 \u1085 \u1072 \u1103  \u1089 \u1080 \u1089 \u1090 \u1077 \u1084 \u1072  \u1074 \u1079 \u1099 \u1089 \u1082 \u1072 \u1085 \u1080 \u1103 \'bb.**\cb1 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 3. Goals, non-goals & success metrics [CPO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 3.1 Goals (V1)\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G1. Give the bank a **portfolio-level command dashboard** (Control Tower) with real KPIs and an attention queue.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G2. Make the **Case the central aggregate** \'97 every action, document, payment, cost, and SLA timer hangs off it, with an immutable timeline.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G3. Deliver a clickable, **role-aware** experience across all five operator roles with server-side scoping.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G4. Prove the seven core user flows **end-to-end**, each writing audit events.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G5. Ship data-quality validation ("**\uc0\u1087 \u1088 \u1072 \u1074 \u1080 \u1083 \u1100 \u1085 \u1086 \u1089 \u1090 \u1100  \u1079 \u1072 \u1087 \u1086 \u1083 \u1085 \u1077 \u1085 \u1080 \u1103  \u1082 \u1072 \u1082  \u1089 \u1077 \u1088 \u1074 \u1080 \u1089 **") at portfolio ingest.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 G6. Model the **institutional-identity** principle: cases belong to the bank org, not to an individual's signature.\cb1 \
+\
+\cf2 \cb3 \strokec2 ### 3.2 Non-goals (explicitly out of scope for V1)\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Real E-SUD / notary / MIB / \uc0\u1082 \u1072 \u1076 \u1072 \u1089 \u1090 \u1088  / ABS API integrations (mock adapters only).\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Real e-signature (\uc0\u1069 \u1062 \u1055  / E-IMZO) \'97 modeled as an operational attribute, not a real crypto signature.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Real payment rails.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 Native mobile apps (V1 is responsive-to-tablet web).\cb1 \
+\
+\cf2 \cb3 \strokec2 ### 3.3 Success metrics\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | Metric | Definition | V1 target (demo/pilot) |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Portfolio onboarding time \cf2 \strokec2 |\cf0 \strokec4  Excel upload \uc0\u8594  validated cases created \cf2 \strokec2 |\cf0 \strokec4  < 5 min for a 1,000\cf2 \strokec2 -\cf0 \strokec4 row file \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Data\cf2 \strokec2 -\cf0 \strokec4 quality catch rate \cf2 \strokec2 |\cf0 \strokec4  % of bad rows flagged before import \cf2 \strokec2 |\cf0 \strokec4  100% of missing \uc0\u1055 \u1048 \u1053 \u1060 \u1051  / bad amounts / duplicates \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Recovery rate (portfolio) \cf2 \strokec2 |\cf0 \strokec4  Recovered \'f7 total portfolio value \cf2 \strokec2 |\cf0 \strokec4  Visible & trending on Control Tower \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  SLA breach visibility \cf2 \strokec2 |\cf0 \strokec4  Breached timers surfaced in attention queue \cf2 \strokec2 |\cf0 \strokec4  100% surfaced, zero silent breaches \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Audit completeness \cf2 \strokec2 |\cf0 \strokec4  Actions that write an immutable event \cf2 \strokec2 |\cf0 \strokec4  100% of state\cf2 \strokec2 -\cf0 \strokec4 changing actions \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Agency comparability \cf2 \strokec2 |\cf0 \strokec4  Agencies rankable on recovery, SLA, contact discipline, disputes \cf2 \strokec2 |\cf0 \strokec4  All four dimensions rendered \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 4. Users, roles & permissions [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 4.1 Personas\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Bank Admin** \'97 owns the control tower. Uploads portfolios, assigns/reassigns cases, sees all analytics and costs, approves escalations, full audit.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Bank Legal Team** \'97 legal workflow, court/MIB tracking, document generation, approvals.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Collector (agency)** \'97 works only cases assigned to their org. Logs contacts/promises/results. **Cannot** see other agencies' data or perform enforcement.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Legal Firm** \'97 works only assigned cases. Generates documents, tracks court stage.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Manager / Accountant (agency)** \'97 the transfer-approval chain for recovered funds (Collector \uc0\u8594  Manager \u8594  Accountant).\cb1 \
+\
+\cf2 \cb3 \strokec2 ### 4.2 RBAC matrix (enforced server-side)\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | Capability | Bank Admin | Bank Legal | Collector | Legal Firm | Manager | Accountant |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|:---:|:---:|:---:|:---:|:---:|:---:|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Upload portfolio \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  See full portfolio \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  Own org only \cf2 \strokec2 |\cf0 \strokec4  Own org only \cf2 \strokec2 |\cf0 \strokec4  Own org only \cf2 \strokec2 |\cf0 \strokec4  Own org only \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Assign / reassign \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Log contact / promise \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Generate documents \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Court / MIB tracking \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Enforcement action \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  *(nobody \'97 MIB only)* \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u10060  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Approve fund transfer \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  Initiate \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  Confirm \cf2 \strokec2 |\cf0 \strokec4  Confirm \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Write off / close \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  *(reason required)* \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \strokec4  \'97 \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Full audit log \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9989  \cf2 \strokec2 |\cf0 \strokec4  Own cases \cf2 \strokec2 |\cf0 \strokec4  Own cases \cf2 \strokec2 |\cf0 \strokec4  Own cases \cf2 \strokec2 |\cf0 \strokec4  Own cases \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 >\cf0 \strokec4  **[CTO] Hard rule:** scoping is enforced **server-side**. An agency user must never be able to load another org's cases, even by direct ID. Client-side filtering is a convenience, never a security boundary.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 5. Product scope \'97 the 15 modules [CPO]\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \uc0\u9733  = built fully in V1. Others ship as views/stubs.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 | # | Module | V1 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  1 \cf2 \strokec2 |\cf0 \strokec4  Portfolio Upload (Excel/CSV + manual add) \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  2 \cf2 \strokec2 |\cf0 \strokec4  Debtor 360 profile \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  3 \cf2 \strokec2 |\cf0 \strokec4  Case Management \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  4 \cf2 \strokec2 |\cf0 \strokec4  Assignment Engine \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  5 \cf2 \strokec2 |\cf0 \strokec4  Collector Workspace \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  6 \cf2 \strokec2 |\cf0 \strokec4  Legal Firm Workspace \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  7 \cf2 \strokec2 |\cf0 \strokec4  Document Generator (pre\cf2 \strokec2 -\cf0 \strokec4 claim, court package, calc, MIB submission) \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  8 \cf2 \strokec2 |\cf0 \strokec4  SLA & Task Management \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  9 \cf2 \strokec2 |\cf0 \strokec4  Promise\cf2 \strokec2 -\cf0 \strokec4 to\cf2 \strokec2 -\cf0 \strokec4 Pay & Payment tracking \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  10 \cf2 \strokec2 |\cf0 \strokec4  Agency Performance Analytics \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  11 \cf2 \strokec2 |\cf0 \strokec4  Legal ROI Calculator \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  12 \cf2 \strokec2 |\cf0 \strokec4  Court Stage Tracking (manual) \cf2 \strokec2 |\cf0 \strokec4  View \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  13 \cf2 \strokec2 |\cf0 \strokec4  MIB Stage Tracking (manual) \cf2 \strokec2 |\cf0 \strokec4  View / V2 stub \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  14 \cf2 \strokec2 |\cf0 \strokec4  Compliance & Audit Trail \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  15 \cf2 \strokec2 |\cf0 \strokec4  Bank Control Tower \cf2 \strokec2 |\cf0 \strokec4  \uc0\u9733  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 6. Case lifecycle & state machine [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 6.1 Lifecycle spine\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7 Overdue Loan \uc0\u8594  Soft Collection \u8594  Legal Preparation \u8594  Court (manual)\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7    \uc0\u8594  Execution Document \u8594  MIB (manual tracking) \u8594  Recovery / Closure\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 The recurring visual motif across dashboards is the spine **PRE-COURT \uc0\u8594  COURT \u8594  POST-COURT / MIB**.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ### 6.2 Status enum (Russian labels in UI)\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7 `New \'b7 Assigned \'b7 In soft collection \'b7 Contacted \'b7 No contact \'b7 Promise to pay \'b7 Promise broken \'b7 Partially paid \'b7 Paid \'b7 Dispute \'b7 Restructuring proposed \'b7 Restructured \'b7 Escalated to legal \'b7 Pre-claim sent \'b7 Court package ready \'b7 Filed to court \'b7 Court decision received \'b7 Ready for MIB \'b7 Closed \'b7 Written off`\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **Color logic:** resolved (Paid / Closed / Restructured) = green; problem (No contact / Promise broken / Dispute / Written off) = red; everything else = neutral/teal.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ### 6.3 DPD-driven cadence (drives default actions & filters)\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | DPD bucket | Default cadence |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  1\'9630 \cf2 \strokec2 |\cf0 \strokec4  Soft collection (calls, reminders, neutral tone) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  31\'9660 \cf2 \strokec2 |\cf0 \strokec4  Active with collector (escalation, promise\cf2 \strokec2 -\cf0 \strokec4 to\cf2 \strokec2 -\cf0 \strokec4 pay) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  61\'9690 \cf2 \strokec2 |\cf0 \strokec4  Legal preparation **in advance** (court package prepared early) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  90+ \cf2 \strokec2 |\cf0 \strokec4  NPL \'97 escalate to court/notary or write off \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 6.4 Dual enforcement routing\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Shown as a decision on the case (both mock in V1):\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Undisputed debt + contractual clause \uc0\u8594 ** notary route (\uc0\u1080 \u1089 \u1087 \u1086 \u1083 \u1085 \u1080 \u1090 \u1077 \u1083 \u1100 \u1085 \u1072 \u1103  \u1085 \u1072 \u1076 \u1087 \u1080 \u1089 \u1100 , ~3 weeks) \u8594  MIB\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Disputed debt \uc0\u8594 ** court route (E-SUD filing \uc0\u8594  decision \u8594  execution doc) \u8594  MIB\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Both converge on MIB; the platform records which path is active and tracks both.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 >\cf0 \strokec4  **[CTO] Implementation:** the state machine is explicit. Only valid transitions are enabled in the UI, and the server rejects any transition not in the allowed set for the current status **and** the acting role (e.g. a collector cannot move a case to *Filed to court*). Every transition writes a \cf7 \strokec7 `CaseEvent`\cf0 \strokec4 .\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 7. Architecture [CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ### 7.1 Principles\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 1. \cf0 \strokec4 **Multi-tenant by organization.** Top-level tenant = a bank/MFO. Agencies and legal firms are connected participant orgs scoped to that tenant.\cb1 \
+\cf2 \cb3 \strokec2 2. \cf0 \strokec4 **Case as the central aggregate.** A Case has a debtor, amount, collateral flag, status, assigned org, event timeline, documents, payments, SLA timers, and a cost ledger.\cb1 \
+\cf2 \cb3 \strokec2 3. \cf0 \strokec4 **Event-sourced timeline / audit trail.** Every action writes an *immutable* event (who, what, when, result). This powers the audit log, the data-validation service, and agency analytics.\cb1 \
+\cf2 \cb3 \strokec2 4. \cf0 \strokec4 **Institutional identity, not personal.** Cases belong to the bank org, not to an individual lawyer's signature. A lawyer's \uc0\u1069 \u1062 \u1055  is an operational signing layer \'97 model \cf7 \strokec7 `signedBy`\cf0 \strokec4  as a removable operational attribute, never as the owner of the case. If a lawyer leaves, history and metrics persist on the org.\cb1 \
+\cf2 \cb3 \strokec2 5. \cf0 \strokec4 **Pluggable integration boundary.** A single \cf7 \strokec7 `IntegrationAdapter`\cf0 \strokec4  interface; V1 ships mock adapters only.\cb1 \
+\cf2 \cb3 \strokec2 6. \cf0 \strokec4 **RBAC enforced server-side.**\cb1 \
+\
+\cf2 \cb3 \strokec2 ### 7.2 Recommended stack\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | Layer | Choice | Notes |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Frontend \cf2 \strokec2 |\cf0 \strokec4  Next.js (App Router) + TypeScript + Tailwind \cf2 \strokec2 |\cf0 \strokec4  Consistent component library \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Backend \cf2 \strokec2 |\cf0 \strokec4  NestJS (or Next API routes for pure prototype) + TypeScript \cf2 \strokec2 |\cf0 \strokec4  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  DB \cf2 \strokec2 |\cf0 \strokec4  PostgreSQL via Prisma \cf2 \strokec2 |\cf0 \strokec4  Redis for queues/cache (stubbable) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Auth \cf2 \strokec2 |\cf0 \strokec4  Email/password + RBAC \cf2 \strokec2 |\cf0 \strokec4  Session or JWT \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  File storage \cf2 \strokec2 |\cf0 \strokec4  Object\cf2 \strokec2 -\cf0 \strokec4 storage abstraction \cf2 \strokec2 |\cf0 \strokec4  S3\cf2 \strokec2 -\cf0 \strokec4 compatible / local disk for prototype \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Deployment \cf2 \strokec2 |\cf0 \strokec4  **On-premise-capable** \cf2 \strokec2 |\cf0 \strokec4  Banks require data localization \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 >\cf0 \strokec4  The interactive prototype in this project runs the data model, RBAC scoping, state machine, and all seven flows **in-memory / seed JSON with React state** (no browser localStorage \'97 unsupported in the target preview). The production build swaps the in-memory store for Postgres/Prisma behind the same domain logic.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ### 7.3 Core data model (Prisma-style, minimum)\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7 Organization \{ id, name, type[BANK|MFO|COLLECTOR|LEGAL_FIRM], ... \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 User         \{ id, orgId, name, email, role, eds?(operational) \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 Debtor       \{ id, pinfl, name, phone, address, assetProfile?, accountBalances? \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 Case         \{ id, tenantBankId, debtorId, amountUSD, amountUZS, collateral[bool],\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7                type[SECURED|UNSECURED], status, dpd(int), assignedOrgId?,\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7                assignedUserId?, voluntaryPeriodDays?, createdAt \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 CaseEvent    \{ id, caseId, actorUserId, type, payloadJson, result, createdAt \}  // immutable\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 Document     \{ id, caseId, kind[PRE_CLAIM|COURT_PACKAGE|CALC|MIB_SUBMISSION|...],\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7                status, fileRef, generatedAt \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 Payment      \{ id, caseId, amountUSD, kind[FULL|PARTIAL|PROMISE], promisedDate?, paidAt? \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 CostEntry    \{ id, caseId, kind[STORAGE|EXPERTISE|LEGAL|OTHER], amountUSD, note \} // cost-to-recover\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 SlaTimer     \{ id, caseId, type, dueAt, breached[bool] \}\cf0 \cb1 \strokec4 \
+\cf7 \cb3 \strokec7 Assignment   \{ id, caseId, fromOrgId, toOrgId, byUserId, at \}  // reassignment history\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ### 7.4 The integration boundary (the seam that makes V2 cheap) [CTO]\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```ts\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 interface\cf0 \strokec4  \cf8 \strokec8 IntegrationAdapter\cf0 \strokec4  \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3   submitCase(caseId: \cf2 \strokec2 string\cf0 \strokec4 ): \cf8 \strokec8 Promise\cf0 \strokec4 <\cf8 \strokec8 SubmissionRef\cf0 \strokec4 >;\cb1 \
+\cb3   fetchStatus(ref: \cf8 \strokec8 SubmissionRef\cf0 \strokec4 ): \cf8 \strokec8 Promise\cf0 \strokec4 <\cf8 \strokec8 ExternalStatus\cf0 \strokec4 >;\cb1 \
+\cb3   requestAssetReport(debtorPinfl: \cf2 \strokec2 string\cf0 \strokec4 ): \cf8 \strokec8 Promise\cf0 \strokec4 <\cf8 \strokec8 AssetReport\cf0 \strokec4 >;\cb1 \
+\cb3 \}\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 ```\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 V1 ships **mock adapters only**. V2 adapters \'97 **E-SUD, \uc0\u1053 \u1086 \u1090 \u1072 \u1088 \u1080 \u1091 \u1089 , MIB/\u1041 \u1055 \u1048 , \u1050 \u1072 \u1076 \u1072 \u1089 \u1090 \u1088 /\u1075 \u1086 \u1089 -\u1041 \u1044 , ABS, E-IMZO** \'97 implement the *same* interface later. This seam is explicit in code; nothing above the adapter knows whether it is talking to a mock or a real state system. V2 modules appear in V1 as visibly disabled **\'ab\uc0\u1079 \u1072 \u1087 \u1083 \u1072 \u1085 \u1080 \u1088 \u1086 \u1074 \u1072 \u1085 \u1086  (V2)\'bb** views.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 8. Key user flows (must be clickable end-to-end) [CPO]\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Each flow writes audit events.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 1. \cf0 \strokec4 **Onboard a portfolio.** Bank Admin uploads Excel \uc0\u8594  validation report flags errors (missing \u1055 \u1048 \u1053 \u1060 \u1051 , bad amounts, duplicates) \u8594  fix/confirm \u8594  cases appear as *New* in the list and on the Control Tower.\cb1 \
+\cf2 \cb3 \strokec2 2. \cf0 \strokec4 **Assign & work a case.** Admin assigns a *New* case to an agency \uc0\u8594  Collector sees it \u8594  logs a *Promise to pay* with a date \uc0\u8594  status updates \u8594  timeline + SLA timer update \u8594  Control Tower reflects it.\cb1 \
+\cf2 \cb3 \strokec2 3. \cf0 \strokec4 **Escalate to legal & generate documents.** Case crosses 61 DPD or admin escalates \uc0\u8594  goes to Legal Firm \u8594  lawyer generates a court package (PDF preview) \u8594  status *Court package ready* \uc0\u8594  *Filed to court* (manual) \uc0\u8594  tracked to *Court decision received*.\cb1 \
+\cf2 \cb3 \strokec2 4. \cf0 \strokec4 **Enforcement routing decision.** On a case, choose notary (undisputed) vs court (disputed); platform records the path; both converge to a (mock) MIB view.\cb1 \
+\cf2 \cb3 \strokec2 5. \cf0 \strokec4 **Recover & close with approval chain.** Collector records full payment \uc0\u8594  initiates transfer \u8594  Manager approves \u8594  Accountant approves \u8594  case *Paid* \uc0\u8594  *Closed*. Every step audited.\cb1 \
+\cf2 \cb3 \strokec2 6. \cf0 \strokec4 **Decide with ROI.** Admin opens the Legal ROI Calculator on a high-value case \uc0\u8594  sees expected recovery < cost \u8594  recommendation to restructure \u8594  records *Restructuring proposed*.\cb1 \
+\cf2 \cb3 \strokec2 7. \cf0 \strokec4 **Compare agencies & reassign.** Admin opens Agency Analytics \uc0\u8594  sees an agency underperforming \u8594  reassigns its open cases via the marketplace \u8594  audit event written (with mandatory reason).\cb1 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 9. Screens (role-aware) [CPO]\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **A. Auth & shell** \'97 login + role switch (demo allows picking a role); app shell with left nav (icons + Russian labels), top bar with tenant name + tagline, global search by \uc0\u1055 \u1048 \u1053 \u1060 \u1051 /\u1060 \u1048 \u1054 .\cb1 \
+\
+\cb3 **B. Bank Admin / Control Tower**\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Control Tower** \'97 portfolio KPIs (total overdue USD/UZS, recovery rate, cases by DPD bucket, cases by status funnel, agency leaderboard, SLA breaches, cost-to-recover), charts + attention queue (\'ab\uc0\u1090 \u1088 \u1077 \u1073 \u1091 \u1077 \u1090  \u1074 \u1085 \u1080 \u1084 \u1072 \u1085 \u1080 \u1103 \'bb).\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Portfolio Upload** \'97 drag Excel/CSV \uc0\u8594  column mapping \u8594  validation report \u8594  confirm \u8594  cases created as *New*.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Cases list** \'97 filter by status, DPD bucket, agency, collateral, amount; bulk-assign/reassign; export.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Case Detail (the heart of the app)** \'97 debtor header (amount USD+UZS, collateral, type, status, assigned org, DPD); immutable event timeline (newest first); state-machine-aware status control; enforcement routing widget; tabs: \uc0\u1044 \u1086 \u1082 \u1091 \u1084 \u1077 \u1085 \u1090 \u1099 , \u1055 \u1083 \u1072 \u1090 \u1077 \u1078 \u1080 , \u1047 \u1072 \u1090 \u1088 \u1072 \u1090 \u1099 , SLA, \u1048 \u1089 \u1090 \u1086 \u1088 \u1080 \u1103  \u1085 \u1072 \u1079 \u1085 \u1072 \u1095 \u1077 \u1085 \u1080 \u1081 , \u1040 \u1091 \u1076 \u1080 \u1090 .\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Assignment / Marketplace**, **Agency Analytics**, **Legal ROI Calculator**, **Audit Log**.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **C. Collector Workspace** \'97 My cases (assigned only, prioritized by DPD/promise dates); case work view (log contact result, set next action); transfer-recovered-funds approval chain; My performance.\cb1 \
+\
+\cb3 **D. Legal Firm Workspace** \'97 My legal cases; document generator (pick template \uc0\u8594  fill \u8594  preview/generate PDF \u8594  attach \u8594  status advances); court tracking (manual statuses); deadline reminders (SLA timers).\cb1 \
+\
+\cb3 **E. Roadmap stubs (show as "V2", read-only/disabled)** \'97 MIB tracking board; Integrations page (E-SUD, \uc0\u1053 \u1086 \u1090 \u1072 \u1088 \u1080 \u1091 \u1089 , MIB/\u1041 \u1055 \u1048 , \u1050 \u1072 \u1076 \u1072 \u1089 \u1090 \u1088 , ABS, E-IMZO) marked \'ab\u1079 \u1072 \u1087 \u1083 \u1072 \u1085 \u1080 \u1088 \u1086 \u1074 \u1072 \u1085 \u1086  (V2)\'bb.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 10. Design system [CPO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Feel:** institutional, trustworthy, "control tower." Clean, dense-but-readable enterprise UI. *(Chosen direction: \'ab\uc0\u1050 \u1086 \u1084 \u1072 \u1085 \u1076 \u1085 \u1099 \u1081  \u1087 \u1091 \u1083 \u1100 \u1090 \'bb \'97 dark command center.)*\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Palette:** deep slate/teal base \cf7 \strokec7 `#12303E`\cf0 \strokec4 , ink \cf7 \strokec7 `#0B1F2A`\cf0 \strokec4 ; a single signal accent \'97 electric lime \cf7 \strokec7 `#B8E04A`\cf0 \strokec4  for "live/active"; amber \cf7 \strokec7 `#E8A33D`\cf0 \strokec4  for money/value; light mist \cf7 \strokec7 `#EEF3F4`\cf0 \strokec4  for work surfaces; red \cf7 \strokec7 `#C0504D`\cf0 \strokec4  for problem states.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Typography:** a strong display face for headers (Manrope) + a clean sans for body/data (IBM Plex Sans) + IBM Plex Mono for figures/IDs.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Recurring motif:** the lifecycle spine PRE-COURT \uc0\u8594  COURT \u8594  POST-COURT/MIB.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Every list/table** has an empty state with a clear next action.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Every destructive action** (reassign, write off, close) requires a **mandatory reason** written to the audit log.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Responsive to tablet** \'97 collectors/executors work in the field.\cb1 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 11. Compliance, security & data localization [CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Immutable audit trail.** \cf7 \strokec7 `CaseEvent`\cf0 \strokec4  records are append-only. No update/delete path exists in the API. The audit log is filterable and exportable.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Data localization.** On-premise-capable deployment; object storage and DB run inside the bank's perimeter.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **PII handling.** \uc0\u1055 \u1048 \u1053 \u1060 \u1051 , phone, address, and asset/account data are personal data \'97 access is role-scoped and every read of sensitive asset data is itself an audit event in production.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Institutional identity.** \cf7 \strokec7 `signedBy`\cf0 \strokec4  (\uc0\u1069 \u1062 \u1055 ) is an operational attribute on documents, removable without affecting case ownership or historical metrics.\cb1 \
+\cf2 \cb3 \strokec2 - \cf0 \strokec4 **Boundary integrity.** No code path lets a private participant perform a state enforcement action. The most a collector/lawyer can do is *record a request* or *track* an MIB action.\cb1 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 12. Deliverables & acceptance criteria [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  Running app, **seeded**, with role switching.\cb1 \
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  Seed: one bank tenant ("Tenge Bank"), 2 collection agencies, 1 legal firm, ~40 cases across all DPD buckets and statuses, realistic Uzbek names + \uc0\u1055 \u1048 \u1053 \u1060 \u1051 , amounts in UZS+USD, mix of secured/unsecured, several promise-to-pay dates, a few cost entries (\u1089 \u1090 \u1086 \u1103 \u1085 \u1082 \u1072  \u1079 \u1072 \u1083 \u1086 \u1075 \u1072 , \u1086 \u1073 \u1077 \u1076 \u1099  \u1052 \u1048 \u1041 , \u1101 \u1082 \u1089 \u1087 \u1077 \u1088 \u1090 \u1080 \u1079 \u1072 ), and a populated audit trail so analytics render meaningfully on first load.\cb1 \
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  All **seven flows** (\'a78) work end-to-end and write audit events.\cb1 \
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  **RBAC scoping verified** \'97 an agency cannot see another agency's cases.\cb1 \
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  Integration boundary exists with **mock adapters**; V2 items visibly stubbed.\cb1 \
+\cf2 \cb3 \strokec2 - \cf6 \strokec6 [ ]\cf0 \strokec4  README covers: how to run, the data model, the \cf7 \strokec7 `IntegrationAdapter`\cf0 \strokec4  seam, and what is V1 vs V2.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 **Out of scope for V1 (stub only):** real E-SUD/notary/MIB/\uc0\u1082 \u1072 \u1076 \u1072 \u1089 \u1090 \u1088 /ABS APIs, real e-signature, real payment rails, native mobile apps.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 13. Roadmap \'97 V2 and beyond [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | Theme | V2 item | Depends on |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Court \cf2 \strokec2 |\cf0 \strokec4  E\cf2 \strokec2 -\cf0 \strokec4 SUD e\cf2 \strokec2 -\cf0 \strokec4 filing integration \cf2 \strokec2 |\cf0 \strokec4  \cf7 \strokec7 `IntegrationAdapter`\cf0 \strokec4  \uc0\u8594  E\cf2 \strokec2 -\cf0 \strokec4 SUD \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Notary \cf2 \strokec2 |\cf0 \strokec4  \uc0\u1048 \u1089 \u1087 \u1086 \u1083 \u1085 \u1080 \u1090 \u1077 \u1083 \u1100 \u1085 \u1072 \u1103  \u1085 \u1072 \u1076 \u1087 \u1080 \u1089 \u1100  automation \cf2 \strokec2 |\cf0 \strokec4  \cf7 \strokec7 `IntegrationAdapter`\cf0 \strokec4  \uc0\u8594  \u1053 \u1086 \u1090 \u1072 \u1088 \u1080 \u1091 \u1089  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Enforcement \cf2 \strokec2 |\cf0 \strokec4  MIB / \uc0\u1041 \u1055 \u1048  status sync (executor assigned, voluntary period, salary deduction, asset restriction, recovery) \cf2 \strokec2 |\cf0 \strokec4  \cf7 \strokec7 `IntegrationAdapter`\cf0 \strokec4  \uc0\u8594  MIB/\u1041 \u1055 \u1048  \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Data enrichment \cf2 \strokec2 |\cf0 \strokec4  \uc0\u1050 \u1072 \u1076 \u1072 \u1089 \u1090 \u1088  / gov databases, ABS core\cf2 \strokec2 -\cf0 \strokec4 banking, currency accounts \cf2 \strokec2 |\cf0 \strokec4  Respective adapters \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Signing \cf2 \strokec2 |\cf0 \strokec4  Real \uc0\u1069 \u1062 \u1055  via E\cf2 \strokec2 -\cf0 \strokec4 IMZO \cf2 \strokec2 |\cf0 \strokec4  E\cf2 \strokec2 -\cf0 \strokec4 IMZO adapter \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  Intelligence \cf2 \strokec2 |\cf0 \strokec4  Predictive P(recovery) scoring feeding the ROI calculator \cf2 \strokec2 |\cf0 \strokec4  Historical event data (already captured in V1) \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 Because V1 captures every action as an immutable event, the analytics and ML groundwork for V2 is already being collected from day one.\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ## 14. Open questions & risks [CPO + CTO]\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 | # | Question / risk | Owner | Notes |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |---|---|---|---|\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  1 \cf2 \strokec2 |\cf0 \strokec4  Final agency SLA definitions (per\cf2 \strokec2 -\cf0 \strokec4 step timers & thresholds) \cf2 \strokec2 |\cf0 \strokec4  CPO + Collections \cf2 \strokec2 |\cf0 \strokec4  V1 uses reasonable defaults; needs pilot sign\cf2 \strokec2 -\cf0 \strokec4 off \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  2 \cf2 \strokec2 |\cf0 \strokec4  FX handling \'97 fixed vs live USD\uc0\u8596 UZS rate \cf2 \strokec2 |\cf0 \strokec4  CTO \cf2 \strokec2 |\cf0 \strokec4  V1 uses a fixed demo rate; production needs a rate source \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  3 \cf2 \strokec2 |\cf0 \strokec4  E\cf2 \strokec2 -\cf0 \strokec4 SUD/MIB API availability & auth model \cf2 \strokec2 |\cf0 \strokec4  CTO \cf2 \strokec2 |\cf0 \strokec4  Gates V2 timeline \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  4 \cf2 \strokec2 |\cf0 \strokec4  Data\cf2 \strokec2 -\cf0 \strokec4 localization certification requirements per bank \cf2 \strokec2 |\cf0 \strokec4  CTO + DPO \cf2 \strokec2 |\cf0 \strokec4  On\cf2 \strokec2 -\cf0 \strokec4 prem deploy validated per tenant \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 |\cf0 \strokec4  5 \cf2 \strokec2 |\cf0 \strokec4  Reason taxonomy for write\cf2 \strokec2 -\cf0 \strokec4 offs (free text vs controlled list) \cf2 \strokec2 |\cf0 \strokec4  CPO + Legal \cf2 \strokec2 |\cf0 \strokec4  Currently free text \uc0\u8594  audit \cf2 \strokec2 |\cf0 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 ---\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 *\'97 Signed, CPO (Product) & CTO (Architecture & Engineering). This document governs the V1 MVP build; scope changes require both signatures.*\cb1 \
+}

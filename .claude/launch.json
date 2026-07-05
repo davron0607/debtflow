@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "recovery-command-main", "--", "--port", "8091", "--strictPort"],
+      "port": 8091,
+      "autoPort": false
+    }
+  ]
+}
