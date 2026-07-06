@@ -12,4 +12,6 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Railway (и любой Docker/VM-хостинг) — обычный Node-сервер, не Cloudflare Workers
+  nitro: { preset: "node-server" },
 });
