@@ -30,14 +30,18 @@ import type { DB as SnapshotDB, UserRole, CaseStatus } from "./store/types";
 // ——— RBAC-хелперы ———
 const BANK_ROLES: UserRole[] = ["BANK_ADMIN", "BANK_LEGAL"];
 const isBank = (u: User) => BANK_ROLES.includes(u.role as UserRole);
+const COLLECTOR_ROLES: UserRole[] = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"];
+const isCollector = (u: User) => COLLECTOR_ROLES.includes(u.role as UserRole);
 
 function forbid(msg = "FORBIDDEN"): never {
   throw new Error(msg);
 }
 
-// Скоуп дел: банк видит всё, агентства/юрфирмы — только назначенные им
+// Скоуп дел (мультитенантность): админ/юрист банка — портфель своего банка;
+// все исполнители (агентства, юрфирмы, внутрибанковские коллекторы) —
+// только дела, назначенные их организации.
 function caseScope(u: User): Prisma.CaseWhereInput {
-  return isBank(u) ? {} : { assignedOrgId: u.orgId };
+  return isBank(u) ? { tenantBankId: u.orgId } : { assignedOrgId: u.orgId };
 }
 
 async function requireCaseInScope(u: User, caseId: string) {
@@ -122,11 +126,34 @@ async function sendVerificationEmail(userId: string, email: string, name: string
   return res;
 }
 
+// Антифрод для банков/МФО: бесплатные почтовые провайдеры запрещены,
+// e-mail обязан быть на заявленном официальном домене, у домена должны
+// существовать MX-записи (реальная почтовая инфраструктура).
+const FREE_MAIL = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com",
+  "icloud.com", "mail.ru", "bk.ru", "inbox.ru", "list.ru", "yandex.ru", "yandex.com",
+  "ya.ru", "rambler.ru", "proton.me", "protonmail.com", "gmx.com", "aol.com", "mail.com",
+]);
+
+const normalizeDomain = (d: string) =>
+  d.toLowerCase().trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+
+async function domainHasMx(domain: string): Promise<boolean> {
+  try {
+    const { resolveMx } = await import("node:dns/promises");
+    const mx = await resolveMx(domain);
+    return mx.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export const apiRegister = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       orgName: z.string().min(2).max(200),
-      orgType: z.enum(["COLLECTOR", "LEGAL_FIRM"]),
+      orgType: z.enum(["COLLECTOR", "LEGAL_FIRM", "BANK", "MFO"]),
+      orgDomain: z.string().max(200).optional(), // обязателен для BANK/MFO
       name: z.string().min(2).max(200),
       email: z.string().email(),
       password: z.string().min(8).max(200),
@@ -135,26 +162,52 @@ export const apiRegister = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertSameOrigin();
     const email = data.email.toLowerCase().trim();
+    const emailDomain = email.split("@")[1] ?? "";
     const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
     if (!(await checkRateLimit("register-ip", ip)).ok)
       return { ok: false as const, error: "Слишком много регистраций. Попробуйте позже." };
     if (await prisma.user.findUnique({ where: { email } }))
       return { ok: false as const, error: "Этот e-mail уже зарегистрирован" };
-    // Новая организация-партнёр + её первый пользователь (менеджер, не подтверждён)
+
+    const isFinancial = data.orgType === "BANK" || data.orgType === "MFO";
+    let orgDomain: string | null = null;
+
+    if (isFinancial) {
+      if (!data.orgDomain?.trim())
+        return { ok: false as const, error: "Для банка/МФО укажите официальный домен организации" };
+      orgDomain = normalizeDomain(data.orgDomain);
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(orgDomain))
+        return { ok: false as const, error: "Укажите корректный домен, например tengebank.uz" };
+      if (FREE_MAIL.has(emailDomain))
+        return { ok: false as const, error: "Для банка/МФО нужен корпоративный e-mail, а не публичный почтовый сервис" };
+      if (emailDomain !== orgDomain && !emailDomain.endsWith("." + orgDomain))
+        return {
+          ok: false as const,
+          error: `E-mail должен быть на домене организации (@${orgDomain}) — это подтверждает, что вы действуете от её имени`,
+        };
+      if (await prisma.organization.findFirst({ where: { domain: orgDomain } }))
+        return { ok: false as const, error: "Организация с этим доменом уже зарегистрирована" };
+      if (!(await domainHasMx(emailDomain))) {
+        logEvent("warn", "register_mx_failed", { domain: emailDomain });
+        return { ok: false as const, error: "Домен не принимает почту (нет MX-записей) — проверьте адрес" };
+      }
+    }
+
+    // Новая организация + её первый пользователь (не подтверждён до клика в письме)
     const org = await prisma.organization.create({
-      data: { name: data.orgName.trim(), type: data.orgType },
+      data: { name: data.orgName.trim(), type: data.orgType, domain: orgDomain },
     });
     const user = await prisma.user.create({
       data: {
         orgId: org.id,
         name: data.name.trim(),
         email,
-        role: "MANAGER",
+        role: isFinancial ? "BANK_ADMIN" : "MANAGER",
         passwordHash: await hashPassword(data.password),
         emailVerifiedAt: null,
       },
     });
-    logEvent("info", "org_registered", { orgId: org.id, userId: user.id, orgType: data.orgType });
+    logEvent("info", "org_registered", { orgId: org.id, userId: user.id, orgType: data.orgType, domain: orgDomain });
     await sendVerificationEmail(user.id, email, user.name);
     return { ok: true as const };
   });
@@ -267,10 +320,15 @@ export const apiSnapshot = createServerFn({ method: "GET" }).handler(async () =>
   const [orgs, users, debtors, events, documents, payments, costs, slas, assignments, transfers, visits] =
     await Promise.all([
       prisma.organization.findMany(),
-      // Пользователи: банк видит всех (для назначений/аудита), агентства — свою орг.
-      // Пароль-хэши не покидают сервер никогда.
+      // Пользователи (мультитенантность): банк видит свою орг + партнёров
+      // (для назначений и имён в аудите), но НЕ других банков; партнёры — свою орг
+      // + банки (имена акторов в таймлайне). Пароль-хэши не покидают сервер никогда.
       prisma.user.findMany({
-        where: isBank(u) || isDemoMode() ? {} : { orgId: u.orgId },
+        where: isDemoMode()
+          ? {}
+          : isBank(u)
+          ? { OR: [{ orgId: u.orgId }, { org: { type: { in: ["COLLECTOR", "LEGAL_FIRM"] } } }] }
+          : { OR: [{ orgId: u.orgId }, { org: { type: { in: ["BANK", "MFO"] } } }] },
         select: { id: true, orgId: true, name: true, email: true, role: true, edsOperational: true, active: true },
       }),
       prisma.debtor.findMany({ where: { cases: { some: scope } } }),
@@ -420,11 +478,13 @@ export const apiAssign = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Назначает только администратор банка");
-    const c = await prisma.case.findUnique({ where: { id: data.caseId } });
-    if (!c) forbid();
+    // Тенант-скоуп: банк распоряжается только собственным портфелем
+    const c = await prisma.case.findFirst({ where: { id: data.caseId, tenantBankId: u.orgId } });
+    if (!c) forbid("Дело не найдено или недоступно");
     const target = await prisma.organization.findUnique({ where: { id: data.toOrgId } });
-    if (!target || (target.type !== "COLLECTOR" && target.type !== "LEGAL_FIRM"))
-      forbid("Назначать можно только коллекторам и юр. фирмам");
+    const inHouse = target?.id === u.orgId; // собственная служба взыскания банка
+    if (!target || (!inHouse && target.type !== "COLLECTOR" && target.type !== "LEGAL_FIRM"))
+      forbid("Назначать можно коллекторам, юр. фирмам или собственной службе");
     if (c.assignedOrgId && !data.reason?.trim())
       return { ok: false, error: "Переназначение требует обоснования (аудит)" };
     await prisma.$transaction([
@@ -460,7 +520,7 @@ export const apiLogContact = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
+    if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await audit(u.id, c.id, "CONTACT_LOGGED", { note: data.note, result: data.result });
     if (
@@ -483,7 +543,7 @@ export const apiLogPromise = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
+    if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.$transaction([
       prisma.payment.create({
@@ -511,7 +571,7 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
+    if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.payment.create({
       data: { caseId: c.id, amountUSD: data.amountUSD, kind: data.kind, paidAt: new Date() },
@@ -605,7 +665,7 @@ export const apiInitiateTransfer = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), amountUSD: z.number().int().positive().max(100_000_000) }))
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (u.role !== "COLLECTOR") forbid("Перевод инициирует коллектор");
+    if (u.role !== "COLLECTOR") forbid("Перевод инициирует коллектор агентства");
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.transfer.create({
       data: { caseId: c.id, amountUSD: data.amountUSD, initiatedByUserId: u.id },
@@ -676,8 +736,9 @@ export const apiCreateCases = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Портфель загружает администратор банка");
-    const bank = await prisma.organization.findFirst({ where: { type: "BANK" } });
-    if (!bank) forbid();
+    // Дела создаются в портфеле собственного банка (мультитенантность)
+    const bank = await prisma.organization.findUnique({ where: { id: u.orgId } });
+    if (!bank || (bank.type !== "BANK" && bank.type !== "MFO")) forbid();
     let created = 0;
     const count = await prisma.case.count();
     for (const [i, r] of data.rows.entries()) {
@@ -715,7 +776,7 @@ export const apiAddUser = createServerFn({ method: "POST" })
       orgId: z.string(),
       name: z.string().min(1).max(200),
       email: z.string().email(),
-      role: z.enum(["BANK_ADMIN", "BANK_LEGAL", "COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"]),
+      role: z.enum(["BANK_ADMIN", "BANK_LEGAL", "COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"]),
       password: z.string().min(8).max(200).optional(),
     }),
   )
@@ -746,7 +807,7 @@ export const apiUpdateUser = createServerFn({ method: "POST" })
       name: z.string().min(1).max(200).optional(),
       email: z.string().email().optional(),
       role: z
-        .enum(["BANK_ADMIN", "BANK_LEGAL", "COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"])
+        .enum(["BANK_ADMIN", "BANK_LEGAL", "COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"])
         .optional(),
       active: z.boolean().optional(),
     }),
@@ -786,7 +847,8 @@ export const apiStartVisit = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (u.role !== "COLLECTOR") forbid("Выезды фиксирует коллектор");
+    if (u.role !== "COLLECTOR" && u.role !== "HARD_COLLECTOR")
+      forbid("Выезды фиксирует выездной коллектор");
     const c = await requireCaseInScope(u, data.caseId);
     const v = await prisma.fieldVisit.create({
       data: { caseId: c.id, collectorUserId: u.id, lat: data.lat, lng: data.lng },

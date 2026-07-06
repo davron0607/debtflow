@@ -221,7 +221,7 @@ function caseRecoRaw(db: DB, c: Case): CaseReco | null {
         ...(s.promisesBroken ? ["Ранее уже нарушал — вероятность низкая"] : []),
       ],
       confidence: overdue ? 88 : 65,
-      approverRoles: ["COLLECTOR", "BANK_ADMIN"],
+      approverRoles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "BANK_ADMIN"],
     };
   }
 
@@ -236,7 +236,7 @@ function caseRecoRaw(db: DB, c: Case): CaseReco | null {
       noContact ? "Телефонный контакт не работает — нужен выезд" : "Ранний контакт удваивает возврат",
     ],
     confidence: 62,
-    approverRoles: ["COLLECTOR", "BANK_ADMIN"],
+    approverRoles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "BANK_ADMIN"],
   };
 }
 

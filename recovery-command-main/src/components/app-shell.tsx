@@ -46,8 +46,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Дела",
     items: [
       { to: "/cases", label: "Все дела", icon: Briefcase, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
-      { to: "/my-cases", label: "Мои дела", icon: ClipboardList, roles: ["COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"] },
-      { to: "/field", label: "Полевой режим", icon: Smartphone, roles: ["COLLECTOR"] },
+      { to: "/my-cases", label: "Мои дела", icon: ClipboardList, roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"] },
+      { to: "/field", label: "Полевой режим", icon: Smartphone, roles: ["COLLECTOR", "HARD_COLLECTOR"] },
       { to: "/portfolio/upload", label: "Загрузка портфеля", icon: Upload, roles: ["BANK_ADMIN"] },
     ],
   },

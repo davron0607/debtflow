@@ -21,7 +21,11 @@ function AssignmentsPage() {
     return <div className="p-8 text-sm text-muted-foreground">Доступно только Администратору банка.</div>;
   }
 
-  const collectors = db.orgs.filter((o) => o.type === "COLLECTOR" || o.type === "LEGAL_FIRM");
+  const collectors = [
+    // Собственная служба взыскания банка (in-house) — первой в списке
+    ...db.orgs.filter((o) => o.id === currentUser.orgId),
+    ...db.orgs.filter((o) => o.type === "COLLECTOR" || o.type === "LEGAL_FIRM"),
+  ];
   const unassigned = cases.filter((c) => !c.assignedOrgId);
   const active = cases.filter((c) => c.assignedOrgId && !["CLOSED", "WRITTEN_OFF", "PAID"].includes(c.status));
 

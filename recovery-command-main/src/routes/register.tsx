@@ -8,8 +8,11 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
+type RegOrgType = "COLLECTOR" | "LEGAL_FIRM" | "BANK" | "MFO";
+
 function RegisterPage() {
-  const [orgType, setOrgType] = useState<"COLLECTOR" | "LEGAL_FIRM">("COLLECTOR");
+  const [orgType, setOrgType] = useState<RegOrgType>("COLLECTOR");
+  const [orgDomain, setOrgDomain] = useState("");
   const [orgName, setOrgName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,13 +20,16 @@ function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const isFinancial = orgType === "BANK" || orgType === "MFO";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (password.length < 8) return setError("Минимальная длина пароля — 8 символов");
     setBusy(true);
-    const res = await apiRegister({ data: { orgType, orgName, name, email, password } });
+    const res = await apiRegister({
+      data: { orgType, orgName, name, email, password, orgDomain: orgDomain || undefined },
+    });
     setBusy(false);
     if (!res.ok) return setError(res.error ?? "Ошибка регистрации");
     setSent(true);
@@ -54,8 +60,8 @@ function RegisterPage() {
           <>
             <h1 className="font-display text-xl font-bold">Регистрация организации</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Для коллекторских агентств и юридических фирм. Вы станете менеджером организации и
-              сможете добавлять сотрудников. Дела назначает банк.
+              Банки и МФО получают собственный портфель; агентства и юр. фирмы работают с делами,
+              которые им назначают банки.
             </p>
 
             <form onSubmit={submit} className="mt-6 space-y-4">
@@ -68,6 +74,8 @@ function RegisterPage() {
                     [
                       { v: "COLLECTOR", label: "Коллекторское агентство" },
                       { v: "LEGAL_FIRM", label: "Юридическая фирма" },
+                      { v: "BANK", label: "Банк" },
+                      { v: "MFO", label: "МФО" },
                     ] as const
                   ).map((o) => (
                     <button
@@ -86,6 +94,25 @@ function RegisterPage() {
                   ))}
                 </div>
               </div>
+              {isFinancial && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Официальный домен организации
+                  </label>
+                  <input
+                    required
+                    value={orgDomain}
+                    onChange={(e) => setOrgDomain(e.target.value)}
+                    placeholder="tengebank.uz"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2"
+                  />
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Антифрод-проверка: e-mail администратора должен быть на этом домене, публичные
+                    почтовые сервисы не принимаются, у домена проверяется почтовая инфраструктура
+                    (MX). Так мы убеждаемся, что заявку подаёт сама организация.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Название организации

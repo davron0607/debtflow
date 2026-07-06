@@ -20,7 +20,7 @@ function FieldPage() {
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
 
-  if (currentUser.role !== "COLLECTOR") {
+  if (currentUser.role !== "COLLECTOR" && currentUser.role !== "HARD_COLLECTOR") {
     return (
       <div className="p-6 lg:p-8">
         <h1 className="font-display text-3xl font-bold">Полевой режим</h1>

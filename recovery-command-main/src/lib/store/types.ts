@@ -4,6 +4,8 @@ export type UserRole =
   | "BANK_ADMIN"
   | "BANK_LEGAL"
   | "COLLECTOR"
+  | "SOFT_COLLECTOR"
+  | "HARD_COLLECTOR"
   | "LEGAL_FIRM"
   | "MANAGER"
   | "ACCOUNTANT";
@@ -12,10 +14,17 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   BANK_ADMIN: "Администратор банка",
   BANK_LEGAL: "Юрист банка",
   COLLECTOR: "Коллектор (агентство)",
+  SOFT_COLLECTOR: "Soft-коллектор (звонки)",
+  HARD_COLLECTOR: "Hard-коллектор (выезды)",
   LEGAL_FIRM: "Юридическая фирма",
   MANAGER: "Менеджер (агентство)",
   ACCOUNTANT: "Бухгалтер (агентство)",
 };
+
+// Любой коллекторский профиль (агентский или внутрибанковский)
+export const COLLECTOR_ROLES: UserRole[] = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"];
+// Роли с правом полевых выездов (GPS)
+export const FIELD_ROLES: UserRole[] = ["COLLECTOR", "HARD_COLLECTOR"];
 
 export type CaseStatus =
   | "NEW"
@@ -59,9 +68,9 @@ export interface User {
 
 // Роли, доступные организации данного типа
 export const ORG_ROLES: Record<OrgType, UserRole[]> = {
-  BANK: ["BANK_ADMIN", "BANK_LEGAL"],
-  MFO: ["BANK_ADMIN", "BANK_LEGAL"],
-  COLLECTOR: ["COLLECTOR", "MANAGER", "ACCOUNTANT", "LEGAL_FIRM"],
+  BANK: ["BANK_ADMIN", "BANK_LEGAL", "SOFT_COLLECTOR", "HARD_COLLECTOR"],
+  MFO: ["BANK_ADMIN", "BANK_LEGAL", "SOFT_COLLECTOR", "HARD_COLLECTOR"],
+  COLLECTOR: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "MANAGER", "ACCOUNTANT", "LEGAL_FIRM"],
   LEGAL_FIRM: ["LEGAL_FIRM", "COLLECTOR", "MANAGER", "ACCOUNTANT"],
 };
 
