@@ -6,15 +6,22 @@ import { z } from "zod";
 import type { Prisma, User } from "@prisma/client";
 import { prisma } from "./backend/db";
 import {
+  assertSameOrigin,
   checkLoginRateLimit,
+  checkRateLimit,
+  consumeResetToken,
+  createResetToken,
   createSession,
   currentUser,
   destroySession,
   hashPassword,
   isDemoMode,
-  requireUser,
+  requireUserMutation,
   verifyPassword,
 } from "./backend/auth";
+import { logEvent } from "./backend/log";
+import { sendMail } from "./mail/resend";
+import { getRequestHost, getRequestProtocol, getRequestIP } from "@tanstack/react-start/server";
 import { canTransition } from "./state-machine";
 import type { DB as SnapshotDB, UserRole, CaseStatus } from "./store/types";
 
@@ -50,21 +57,86 @@ async function audit(
   await prisma.caseEvent.create({
     data: { caseId, actorUserId, type, payload: payload as Prisma.InputJsonObject, reason },
   });
+  // Структурированный лог каждой мутации (все они проходят через audit)
+  logEvent("info", "case_mutation", { type, caseId, actorUserId, reason });
 }
 
 // ——— Auth ———
 export const apiLogin = createServerFn({ method: "POST" })
   .inputValidator(z.object({ email: z.string().email(), password: z.string().min(1).max(200) }))
   .handler(async ({ data }) => {
-    if (!checkLoginRateLimit().ok)
+    assertSameOrigin();
+    const email = data.email.toLowerCase().trim();
+    if (!(await checkLoginRateLimit(email)).ok)
       return { ok: false as const, error: "Слишком много попыток. Подождите 15 минут." };
-    const user = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
+    const user = await prisma.user.findUnique({ where: { email } });
     // Единое сообщение — не раскрываем, существует ли e-mail
     const fail = { ok: false as const, error: "Неверный e-mail или пароль" };
-    if (!user) return fail;
-    if (!user.active) return { ok: false as const, error: "Доступ отключён администратором" };
-    if (!(await verifyPassword(data.password, user.passwordHash))) return fail;
+    if (!user) {
+      logEvent("warn", "login_failed", { reason: "unknown_email" });
+      return fail;
+    }
+    if (!user.active) {
+      logEvent("warn", "login_failed", { userId: user.id, reason: "inactive" });
+      return { ok: false as const, error: "Доступ отключён администратором" };
+    }
+    if (!(await verifyPassword(data.password, user.passwordHash))) {
+      logEvent("warn", "login_failed", { userId: user.id, reason: "bad_password" });
+      return fail;
+    }
     await createSession(user.id);
+    logEvent("info", "login_ok", { userId: user.id });
+    return { ok: true as const };
+  });
+
+// ——— Сброс пароля (Resend) ———
+export const apiRequestPasswordReset = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => {
+    assertSameOrigin();
+    const email = data.email.toLowerCase().trim();
+    const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
+    if (!(await checkRateLimit("pwreset-ip", ip)).ok || !(await checkRateLimit("pwreset-email", email)).ok)
+      return { ok: true as const }; // тот же ответ — без раскрытия
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user && user.active) {
+      const token = await createResetToken(user.id);
+      const appUrl = `${getRequestProtocol()}://${getRequestHost({ xForwardedHost: true })}`;
+      const res = await sendMail({
+        to: user.email,
+        subject: "DebtFlow: сброс пароля",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px">
+            <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
+            <p>Здравствуйте, ${user.name}!</p>
+            <p>Вы (или кто-то от вашего имени) запросили сброс пароля. Ссылка действует 1 час.</p>
+            <p><a href="${appUrl}/reset-password?token=${token}"
+                  style="background:#1B3A5C;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">
+              Задать новый пароль</a></p>
+            <p style="color:#888;font-size:12px">Если это были не вы — просто игнорируйте письмо.</p>
+          </div>`,
+      });
+      logEvent("info", "password_reset_requested", { userId: user.id, mailSent: res.ok, mailError: res.error });
+    } else {
+      logEvent("warn", "password_reset_unknown_email", {});
+    }
+    // Всегда ok — не раскрываем существование адреса
+    return { ok: true as const };
+  });
+
+export const apiResetPassword = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ token: z.string().min(32).max(128), password: z.string().min(8).max(200) }))
+  .handler(async ({ data }) => {
+    assertSameOrigin();
+    const userId = await consumeResetToken(data.token);
+    if (!userId) return { ok: false as const, error: "Ссылка недействительна или устарела. Запросите новую." };
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(data.password) },
+    });
+    // Инвалидация всех сессий после смены пароля
+    await prisma.session.deleteMany({ where: { userId } });
+    logEvent("info", "password_reset_done", { userId });
     return { ok: true as const };
   });
 
@@ -78,7 +150,7 @@ export const apiSwitchUser = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userId: z.string() }))
   .handler(async ({ data }) => {
     if (!isDemoMode()) forbid("Переключение ролей отключено в production");
-    await requireUser();
+    await requireUserMutation();
     const target = await prisma.user.findUnique({ where: { id: data.userId } });
     if (!target || !target.active) forbid();
     await destroySession();
@@ -231,7 +303,7 @@ export const apiTransition = createServerFn({ method: "POST" })
     z.object({ caseId: z.string(), to: z.string(), reason: z.string().max(1000).optional() }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const c = await requireCaseInScope(u, data.caseId);
     const to = data.to as CaseStatus;
     if (!canTransition(c.status as CaseStatus, to, u.role as UserRole))
@@ -250,7 +322,7 @@ export const apiAssign = createServerFn({ method: "POST" })
     z.object({ caseId: z.string(), toOrgId: z.string(), reason: z.string().max(1000).optional() }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Назначает только администратор банка");
     const c = await prisma.case.findUnique({ where: { id: data.caseId } });
     if (!c) forbid();
@@ -291,7 +363,7 @@ export const apiLogContact = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await audit(u.id, c.id, "CONTACT_LOGGED", { note: data.note, result: data.result });
@@ -314,7 +386,7 @@ export const apiLogPromise = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.$transaction([
@@ -342,7 +414,7 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!["COLLECTOR", "BANK_ADMIN"].includes(u.role)) forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.payment.create({
@@ -367,7 +439,7 @@ export const apiGenerateDocument = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!["BANK_ADMIN", "BANK_LEGAL", "LEGAL_FIRM"].includes(u.role)) forbid();
     const c = await requireCaseInScope(u, data.caseId);
     const previews: Record<string, string> = {
@@ -409,7 +481,7 @@ export const apiAddCost = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.costEntry.create({
       data: { caseId: c.id, kind: data.kind, amountUSD: data.amountUSD, note: data.note },
@@ -421,7 +493,7 @@ export const apiAddCost = createServerFn({ method: "POST" })
 export const apiSetRoute = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), route: z.enum(["NOTARY", "COURT"]) }))
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!["BANK_ADMIN", "BANK_LEGAL"].includes(u.role)) forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.case.update({
@@ -436,7 +508,7 @@ export const apiSetRoute = createServerFn({ method: "POST" })
 export const apiInitiateTransfer = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), amountUSD: z.number().int().positive().max(100_000_000) }))
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (u.role !== "COLLECTOR") forbid("Перевод инициирует коллектор");
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.transfer.create({
@@ -449,7 +521,7 @@ export const apiInitiateTransfer = createServerFn({ method: "POST" })
 export const apiApproveTransfer = createServerFn({ method: "POST" })
   .inputValidator(z.object({ transferId: z.string() }))
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const t = await prisma.transfer.findUnique({ where: { id: data.transferId }, include: { case: true } });
     if (!t) forbid();
     // Скоуп: менеджер/бухгалтер своей организации
@@ -477,7 +549,7 @@ export const apiApproveTransfer = createServerFn({ method: "POST" })
 export const apiWriteOff = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), reason: z.string().min(3).max(1000) }))
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const c = await requireCaseInScope(u, data.caseId);
     if (!canTransition(c.status as CaseStatus, "WRITTEN_OFF", u.role as UserRole))
       return { ok: false, error: "Списание не разрешено для этой роли/статуса" };
@@ -506,7 +578,7 @@ export const apiCreateCases = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Портфель загружает администратор банка");
     const bank = await prisma.organization.findFirst({ where: { type: "BANK" } });
     if (!bank) forbid();
@@ -552,7 +624,7 @@ export const apiAddUser = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (!canManage(u) || data.orgId !== u.orgId)
       return { ok: false, error: "Недостаточно прав для этой организации" };
     const exists = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
@@ -582,7 +654,7 @@ export const apiUpdateUser = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const target = await prisma.user.findUnique({ where: { id: data.id } });
     if (!target) return { ok: false, error: "Пользователь не найден" };
     if (!canManage(u) || target.orgId !== u.orgId)
@@ -615,7 +687,7 @@ export const apiStartVisit = createServerFn({ method: "POST" })
     z.object({ caseId: z.string(), lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     if (u.role !== "COLLECTOR") forbid("Выезды фиксирует коллектор");
     const c = await requireCaseInScope(u, data.caseId);
     const v = await prisma.fieldVisit.create({
@@ -634,7 +706,7 @@ export const apiCompleteVisit = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const u = await requireUser();
+    const u = await requireUserMutation();
     const v = await prisma.fieldVisit.findUnique({ where: { id: data.visitId }, include: { case: true } });
     if (!v || v.collectorUserId !== u.id) forbid("Завершить выезд может только его автор");
     await prisma.fieldVisit.update({

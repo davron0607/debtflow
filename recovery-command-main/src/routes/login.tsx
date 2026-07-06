@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { LogoMark } from "@/components/logo";
@@ -118,6 +118,9 @@ function LoginPage() {
             >
               <LogIn className="h-4 w-4" /> Войти
             </button>
+            <Link to="/forgot-password" className="block text-center text-xs text-primary hover:underline">
+              Забыли пароль?
+            </Link>
           </form>
 
           <div className="mt-8">

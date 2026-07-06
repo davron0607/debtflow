@@ -119,9 +119,10 @@ model User {
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  sessions  Session[]
-  events    CaseEvent[]
-  visits    FieldVisit[]
+  sessions    Session[]
+  events      CaseEvent[]
+  visits      FieldVisit[]
+  resetTokens PasswordResetToken[]
 
   @@index([orgId])
 }
@@ -138,6 +139,26 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// DB-backed rate limiting — общий для всех инстансов (Railway autoscale)
+model RateLimit {
+  key         String   @id // напр. "login:1.2.3.4" или "login:email@x"
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+}
+
+// Сброс пароля: храним только SHA-256 хэш токена
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Debtor {
