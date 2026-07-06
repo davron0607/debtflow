@@ -5,7 +5,6 @@ import {
   Briefcase,
   Users,
   Gavel,
-  Shield,
   Scale,
   Calculator,
   Building2,
@@ -21,6 +20,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
+import { LogoMark } from "@/components/logo";
 import { ROLE_LABEL, type UserRole } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
 
@@ -84,12 +84,13 @@ export function AppShell() {
     <div className="flex min-h-screen w-full bg-background text-foreground">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
-        <div className="flex items-center gap-2 border-b border-sidebar-border px-5 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground">
-            <Shield className="h-4 w-4" />
-          </div>
+        <div className="flex items-center gap-2.5 border-b border-sidebar-border px-5 py-4">
+          <LogoMark size={34} />
           <div className="leading-tight">
-            <div className="font-display text-sm font-bold text-sidebar-foreground">DebtFlow</div>
+            <div className="font-display text-sm font-bold">
+              <span className="text-sidebar-foreground">Debt</span>
+              <span style={{ color: "#8CC63F" }}>Flow</span>
+            </div>
             <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">Recovery Decision Platform</div>
           </div>
         </div>
@@ -136,7 +137,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center gap-4 border-b border-border bg-surface px-5">
           <div className="flex items-center gap-2 lg:hidden">
-            <Shield className="h-5 w-5 text-primary" />
+            <LogoMark size={24} />
             <span className="font-display text-sm font-bold">DebtFlow</span>
           </div>
           <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">

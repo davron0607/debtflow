@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { Shield, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { useStore, DEMO_PASSWORD } from "@/lib/store/store";
 import { ROLE_LABEL } from "@/lib/store/types";
 
@@ -34,12 +35,14 @@ function LoginPage() {
       <div className="w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-surface shadow-sm lg:grid lg:grid-cols-5">
         {/* Brand panel */}
         <div className="bg-sidebar p-8 text-sidebar-foreground lg:col-span-2">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded bg-primary text-primary-foreground">
-              <Shield className="h-5 w-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-white p-1.5">
+              <LogoMark size={36} />
             </div>
             <div className="leading-tight">
-              <div className="font-display text-lg font-bold">DebtFlow</div>
+              <div className="font-display text-lg font-bold">
+                Debt<span style={{ color: "#8CC63F" }}>Flow</span>
+              </div>
               <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">
                 debtflow.uz
               </div>

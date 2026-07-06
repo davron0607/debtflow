@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
+import "leaflet/dist/leaflet.css";
 import { useStore } from "@/lib/store/store";
 import { VISIT_RESULT_LABEL, type FieldVisit } from "@/lib/store/types";
 import { fmtDateTime } from "@/lib/format";
@@ -43,7 +44,7 @@ function TrackingPage() {
         {/* Map */}
         <div className="rounded-lg border border-border bg-surface p-4 lg:col-span-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Карта выездов · Ташкент (демо-подложка)</div>
+            <div className="text-sm font-medium">Карта выездов · OpenStreetMap</div>
             <select
               value={selectedCollector}
               onChange={(e) => setSelectedCollector(e.target.value)}
@@ -57,11 +58,16 @@ function TrackingPage() {
               ))}
             </select>
           </div>
-          <VisitsMap visits={shown} />
+          <VisitsMap
+            visits={shown}
+            caseCodeById={(id) => db.cases.find((x) => x.id === id)?.code ?? ""}
+            collectorNameById={(id) => db.users.find((x) => x.id === id)?.name ?? ""}
+          />
           <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-success" />контакт / оплата / обещание</span>
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-destructive" />нет на месте / отказ</span>
             <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-primary" />выезд в процессе</span>
+            <span><span className="mr-1 inline-block h-2 w-0.5 align-middle" style={{ borderLeft: "2px dashed #64748b", height: 10, display: "inline-block" }} />маршрут коллектора (по времени)</span>
           </div>
         </div>
 
@@ -151,41 +157,100 @@ function TrackingPage() {
   );
 }
 
-function VisitsMap({ visits }: { visits: FieldVisit[] }) {
-  // Normalized plot over Tashkent bounding box; stylized grid instead of real tiles (V1, on-prem friendly)
-  const B = { minLat: 41.24, maxLat: 41.38, minLng: 69.19, maxLng: 69.37 };
-  const W = 640;
-  const H = 400;
-  const px = (v: FieldVisit) => ({
-    x: ((v.lng - B.minLng) / (B.maxLng - B.minLng)) * W,
-    y: H - ((v.lat - B.minLat) / (B.maxLat - B.minLat)) * H,
-  });
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full rounded-md border border-border bg-mist">
-      {/* grid */}
-      {Array.from({ length: 15 }, (_, i) => (
-        <line key={`v${i}`} x1={(i * W) / 15} y1={0} x2={(i * W) / 15} y2={H} stroke="var(--border)" strokeWidth="0.5" />
-      ))}
-      {Array.from({ length: 10 }, (_, i) => (
-        <line key={`h${i}`} x1={0} y1={(i * H) / 10} x2={W} y2={(i * H) / 10} stroke="var(--border)" strokeWidth="0.5" />
-      ))}
-      {/* stylized river/road hints */}
-      <path d={`M 0 ${H * 0.7} C ${W * 0.3} ${H * 0.55}, ${W * 0.6} ${H * 0.8}, ${W} ${H * 0.6}`} fill="none" stroke="var(--primary)" strokeOpacity="0.15" strokeWidth="10" />
-      <path d={`M ${W * 0.5} 0 L ${W * 0.45} ${H}`} fill="none" stroke="var(--muted-foreground)" strokeOpacity="0.15" strokeWidth="6" />
-      {visits.map((v) => {
-        const { x, y } = px(v);
+// Реальная карта: Leaflet + OpenStreetMap (open source).
+// Точки — выезды (цвет по результату), пунктирные линии — маршрут коллектора
+// в хронологическом порядке. Импорт Leaflet — динамический (SSR-safe).
+const ROUTE_COLORS = ["#2563eb", "#9333ea", "#0d9488", "#c2410c"];
+
+function VisitsMap({
+  visits,
+  caseCodeById,
+  collectorNameById,
+}: {
+  visits: FieldVisit[];
+  caseCodeById: (caseId: string) => string;
+  collectorNameById: (userId: string) => string;
+}) {
+  const divRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<import("leaflet").Map | null>(null);
+  const layerRef = useRef<import("leaflet").LayerGroup | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const L = (await import("leaflet")).default;
+      if (cancelled || !divRef.current) return;
+
+      if (!mapRef.current) {
+        mapRef.current = L.map(divRef.current).setView([41.311, 69.28], 12);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(mapRef.current);
+        layerRef.current = L.layerGroup().addTo(mapRef.current);
+      }
+
+      const layer = layerRef.current!;
+      layer.clearLayers();
+
+      // Маршруты: точки каждого коллектора по времени
+      const byCollector = new Map<string, FieldVisit[]>();
+      visits.forEach((v) => {
+        const arr = byCollector.get(v.collectorUserId) ?? [];
+        arr.push(v);
+        byCollector.set(v.collectorUserId, arr);
+      });
+      let ci = 0;
+      byCollector.forEach((arr, uid) => {
+        const sorted = arr.slice().sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
+        if (sorted.length > 1) {
+          L.polyline(
+            sorted.map((v) => [v.lat, v.lng] as [number, number]),
+            { color: ROUTE_COLORS[ci % ROUTE_COLORS.length], weight: 2, dashArray: "6 6", opacity: 0.7 },
+          )
+            .bindTooltip(`Маршрут: ${collectorNameById(uid)}`)
+            .addTo(layer);
+        }
+        ci++;
+      });
+
+      // Точки выездов
+      visits.forEach((v) => {
         const bad = v.result === "NO_CONTACT" || v.result === "REFUSED";
-        const fill = v.result ? (bad ? "var(--destructive)" : "var(--success)") : "var(--primary)";
-        return (
-          <g key={v.id}>
-            <circle cx={x} cy={y} r={7} fill={fill} opacity={0.2} />
-            <circle cx={x} cy={y} r={3.5} fill={fill} />
-          </g>
+        const color = v.result ? (bad ? "#dc2626" : "#16a34a") : "#2563eb";
+        L.circleMarker([v.lat, v.lng], {
+          radius: 7,
+          color,
+          weight: 2,
+          fillColor: color,
+          fillOpacity: 0.35,
+        })
+          .bindPopup(
+            `<b>${caseCodeById(v.caseId)}</b><br/>${collectorNameById(v.collectorUserId)}<br/>` +
+              `${new Date(v.startedAt).toLocaleString("ru-RU")}<br/>` +
+              `${v.result ? VISIT_RESULT_LABEL[v.result] : "в процессе"}`,
+          )
+          .addTo(layer);
+      });
+
+      if (visits.length > 0) {
+        mapRef.current!.fitBounds(
+          L.latLngBounds(visits.map((v) => [v.lat, v.lng] as [number, number])).pad(0.2),
         );
-      })}
-      <text x={10} y={H - 10} fontSize="10" fill="var(--muted-foreground)">
-        {visits.length} точек GPS
-      </text>
-    </svg>
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visits, caseCodeById, collectorNameById]);
+
+  useEffect(
+    () => () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+    },
+    [],
   );
+
+  return <div ref={divRef} className="h-[420px] w-full rounded-md border border-border" />;
 }
