@@ -115,12 +115,14 @@ export type CaseEventType =
   | "VISIT_STARTED"
   | "VISIT_COMPLETED";
 
+export type EventPayload = Record<string, string | number | boolean | null | undefined>;
+
 export interface CaseEvent {
   id: string;
   caseId: string;
   actorUserId: string;
   type: CaseEventType;
-  payload: Record<string, unknown>;
+  payload: EventPayload;
   result?: string;
   reason?: string;
   createdAt: string;

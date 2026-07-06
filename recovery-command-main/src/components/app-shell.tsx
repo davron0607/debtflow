@@ -72,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 export function AppShell() {
-  const { currentUser, setCurrentUserId, db, logout } = useStore();
+  const { currentUser, setCurrentUserId, db, logout, demoMode } = useStore();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
   const visibleGroups = NAV_GROUPS.map((g) => ({
@@ -145,23 +145,31 @@ export function AppShell() {
             <span className="font-mono uppercase tracking-widest">Tenge Bank · Тенант</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-muted-foreground md:inline">
-              Роль (демо-переключатель):
-            </span>
-            <select
-              value={currentUser.id}
-              onChange={(e) => setCurrentUserId(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground"
-            >
-              {db.users.filter((u) => u.active !== false).map((u) => {
-                const org = db.orgs.find((o) => o.id === u.orgId);
-                return (
-                  <option key={u.id} value={u.id}>
-                    {ROLE_LABEL[u.role]} · {u.name} ({org?.name})
-                  </option>
-                );
-              })}
-            </select>
+            {demoMode ? (
+              <>
+                <span className="hidden text-xs text-muted-foreground md:inline">
+                  Роль (демо-переключатель):
+                </span>
+                <select
+                  value={currentUser.id}
+                  onChange={(e) => setCurrentUserId(e.target.value)}
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground"
+                >
+                  {db.users.filter((u) => u.active !== false).map((u) => {
+                    const org = db.orgs.find((o) => o.id === u.orgId);
+                    return (
+                      <option key={u.id} value={u.id}>
+                        {ROLE_LABEL[u.role]} · {u.name} ({org?.name})
+                      </option>
+                    );
+                  })}
+                </select>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {ROLE_LABEL[currentUser.role]} · {currentUser.name}
+              </span>
+            )}
             <button
               onClick={logout}
               title="Выйти"

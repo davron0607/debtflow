@@ -73,8 +73,8 @@ function UsersPage() {
         <UserForm
           orgs={manageableOrgs.map((o) => ({ id: o.id, name: o.name, roles: ORG_ROLES[o.type] }))}
           onCancel={() => setShowAdd(false)}
-          onSubmit={(v) => {
-            const res = addUser(v);
+          onSubmit={async (v) => {
+            const res = await addUser(v);
             if (res.ok) {
               setShowAdd(false);
               flash("ok", `Пользователь ${v.name} создан. Пароль для демо-входа: demo123.`);
@@ -104,8 +104,8 @@ function UsersPage() {
                   user={u}
                   roles={ORG_ROLES[db.orgs.find((o) => o.id === u.orgId)?.type ?? "COLLECTOR"]}
                   onCancel={() => setEditingId(null)}
-                  onSave={(patch) => {
-                    const res = updateUser(u.id, patch);
+                  onSave={async (patch) => {
+                    const res = await updateUser(u.id, patch);
                     if (res.ok) {
                       setEditingId(null);
                       flash("ok", "Изменения сохранены.");
@@ -143,8 +143,8 @@ function UsersPage() {
                         <Pencil className="h-3 w-3" /> Изменить
                       </button>
                       <button
-                        onClick={() => {
-                          const res = updateUser(u.id, { active: u.active === false });
+                        onClick={async () => {
+                          const res = await updateUser(u.id, { active: u.active === false });
                           if (res.ok)
                             flash("ok", u.active === false ? "Доступ восстановлен." : "Доступ отключён.");
                           else flash("err", res.error!);

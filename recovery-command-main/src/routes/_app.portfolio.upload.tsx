@@ -74,8 +74,8 @@ function PortfolioUpload() {
     );
   }
 
-  const doImport = () => {
-    const n = createCasesFromRows(valid.map(({ _row, _errors, ...r }) => r));
+  const doImport = async () => {
+    const n = await createCasesFromRows(valid.map(({ _row, _errors, ...r }) => r));
     setImported(n);
   };
 

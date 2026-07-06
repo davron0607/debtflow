@@ -63,15 +63,15 @@ function FieldPage() {
     setLocating(true);
     const pos = await getPosition();
     setLocating(false);
-    const res = startVisit(caseId, pos.lat, pos.lng);
+    const res = await startVisit(caseId, pos.lat, pos.lng);
     if (!res.ok) return setError(res.error!);
     setActiveVisitId(res.visitId!);
     setNote("");
   };
 
-  const finish = (result: VisitResult) => {
+  const finish = async (result: VisitResult) => {
     if (!activeVisit) return;
-    const res = completeVisit(activeVisit.id, result, note || undefined);
+    const res = await completeVisit(activeVisit.id, result, note || undefined);
     if (!res.ok) return setError(res.error!);
     setActiveVisitId(null);
     setNote("");
