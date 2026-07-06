@@ -24,6 +24,13 @@ import { LogoMark } from "@/components/logo";
 import { ROLE_LABEL, type UserRole } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
 
+const ORG_TYPE_LABEL: Record<string, string> = {
+  BANK: "Банк-тенант",
+  MFO: "МФО",
+  COLLECTOR: "Коллекторское агентство",
+  LEGAL_FIRM: "Юридическая фирма",
+};
+
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: UserRole[]; badge?: "V2" };
 type NavGroup = { title: string; items: NavItem[] };
 
@@ -142,7 +149,10 @@ export function AppShell() {
           </div>
           <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
             <Gavel className="h-3.5 w-3.5" />
-            <span className="font-mono uppercase tracking-widest">Tenge Bank · Тенант</span>
+            <span className="font-mono uppercase tracking-widest">
+              {db.orgs.find((o) => o.id === currentUser.orgId)?.name ?? ""} ·{" "}
+              {ORG_TYPE_LABEL[db.orgs.find((o) => o.id === currentUser.orgId)?.type ?? "COLLECTOR"]}
+            </span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             {demoMode ? (

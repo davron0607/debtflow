@@ -35,7 +35,7 @@ function VerifyEmailPage() {
       }
       setState("ok");
       await qc.invalidateQueries({ queryKey: ["snapshot"] });
-      setTimeout(() => navigate({ to: "/control-tower" }), 2000);
+      setTimeout(() => navigate({ to: "/" }), 2000);
     })();
   }, [token, navigate, qc]);
 

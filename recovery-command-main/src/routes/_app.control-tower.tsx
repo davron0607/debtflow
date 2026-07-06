@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -14,7 +13,7 @@ import { useStore } from "@/lib/store/store";
 import { fmtUSD, dpdBucket } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/state-machine";
 import { StatusBadge } from "@/components/status-badge";
-import type { CaseStatus } from "@/lib/store/types";
+import { ROLE_LABEL, type CaseStatus } from "@/lib/store/types";
 import { portfolioBrief, suggestAgencies, agencyVerdict } from "@/lib/decision-engine";
 
 export const Route = createFileRoute("/_app/control-tower")({
@@ -25,6 +24,9 @@ function ControlTower() {
   const { db, scopedCases, currentUser, assignCase } = useStore();
   const cases = scopedCases();
   const brief = useMemo(() => portfolioBrief(db, cases), [db, cases]);
+  // Контроль-центр — экран банка; агентства и юрфирмы работают из очереди задач
+  if (currentUser.role !== "BANK_ADMIN" && currentUser.role !== "BANK_LEGAL")
+    return <Navigate to="/queue" />;
 
   const totals = useMemo(() => {
     const totalUSD = cases.reduce((s, c) => s + c.amountUSD, 0);
@@ -104,7 +106,7 @@ function ControlTower() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">
-            {currentUser.role === "BANK_ADMIN" ? "Администратор банка" : "Юрист банка"} · Tenge Bank
+            {ROLE_LABEL[currentUser.role]} · {db.orgs.find((o) => o.id === currentUser.orgId)?.name}
           </div>
           <h1 className="mt-1 font-display text-3xl font-bold">Центр управления</h1>
           <p className="text-sm text-muted-foreground">

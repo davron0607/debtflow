@@ -17,7 +17,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/control-tower" />;
+  if (isAuthenticated) return <Navigate to="/" />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +26,7 @@ function LoginPage() {
       setError(res.error ?? "Ошибка входа");
       return;
     }
-    router.navigate({ to: "/control-tower" });
+    router.navigate({ to: "/" });
   };
 
   // Демо-учётки (пароль demo123) — список статический: до входа сервер
