@@ -115,14 +115,16 @@ model User {
   email          String   @unique
   passwordHash   String
   role           UserRole
-  edsOperational String?  // съёмный операционный атрибут (ЭЦП)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
+  edsOperational  String?  // съёмный операционный атрибут (ЭЦП)
+  active          Boolean  @default(true)
+  emailVerifiedAt DateTime? // null = e-mail не подтверждён, вход запрещён
+  createdAt       DateTime @default(now())
 
   sessions    Session[]
   events      CaseEvent[]
   visits      FieldVisit[]
-  resetTokens PasswordResetToken[]
+  resetTokens        PasswordResetToken[]
+  verificationTokens EmailVerificationToken[] @relation("EmailVerification")
 
   @@index([orgId])
 }
@@ -146,6 +148,19 @@ model RateLimit {
   key         String   @id // напр. "login:1.2.3.4" или "login:email@x"
   count       Int      @default(1)
   windowStart DateTime @default(now())
+}
+
+// Подтверждение e-mail при регистрации: храним только SHA-256 хэш токена
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("EmailVerification", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // Сброс пароля: храним только SHA-256 хэш токена

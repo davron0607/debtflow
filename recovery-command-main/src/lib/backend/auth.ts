@@ -143,6 +143,24 @@ export async function requireUser(): Promise<User> {
   return u;
 }
 
+// ——— Токены подтверждения e-mail (регистрация) ———
+const VERIFY_TTL_MS = 24 * 3600_000; // 24 часа
+
+export async function createVerificationToken(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("hex");
+  await prisma.emailVerificationToken.create({
+    data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
+  });
+  return token;
+}
+
+export async function consumeVerificationToken(token: string): Promise<string | null> {
+  const rec = await prisma.emailVerificationToken.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!rec || rec.usedAt || rec.expiresAt < new Date()) return null;
+  await prisma.emailVerificationToken.update({ where: { id: rec.id }, data: { usedAt: new Date() } });
+  return rec.userId;
+}
+
 // Для мутаций: аутентификация + защита от CSRF в одном вызове
 export async function requireUserMutation(): Promise<User> {
   assertSameOrigin();

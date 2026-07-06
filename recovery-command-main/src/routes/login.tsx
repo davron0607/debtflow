@@ -3,6 +3,7 @@ import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { useStore, DEMO_PASSWORD } from "@/lib/store/store";
+import { apiResendVerification } from "@/lib/api";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -14,6 +15,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
 
   if (isAuthenticated) return <Navigate to="/control-tower" />;
 
@@ -110,6 +112,24 @@ function LoginPage() {
             {error && (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
+                {error.includes("не подтверждён") && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await apiResendVerification({ data: { email } });
+                      setError(null);
+                      setResent(true);
+                    }}
+                    className="mt-1 block font-medium underline"
+                  >
+                    Отправить письмо ещё раз
+                  </button>
+                )}
+              </div>
+            )}
+            {resent && (
+              <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">
+                Письмо отправлено — проверьте почту.
               </div>
             )}
             <button
@@ -118,9 +138,15 @@ function LoginPage() {
             >
               <LogIn className="h-4 w-4" /> Войти
             </button>
-            <Link to="/forgot-password" className="block text-center text-xs text-primary hover:underline">
-              Забыли пароль?
-            </Link>
+            <div className="flex items-center justify-center gap-4">
+              <Link to="/forgot-password" className="text-xs text-primary hover:underline">
+                Забыли пароль?
+              </Link>
+              <span className="text-xs text-muted-foreground">·</span>
+              <Link to="/register" className="text-xs text-primary hover:underline">
+                Регистрация организации
+              </Link>
+            </div>
           </form>
 
           <div className="mt-8">

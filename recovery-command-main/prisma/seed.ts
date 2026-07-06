@@ -28,6 +28,7 @@ async function main() {
       role: u.role,
       edsOperational: u.edsOperational,
       passwordHash,
+      emailVerifiedAt: new Date(),
     })),
   });
   await prisma.debtor.createMany({

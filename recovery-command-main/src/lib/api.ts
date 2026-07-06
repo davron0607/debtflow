@@ -10,8 +10,10 @@ import {
   checkLoginRateLimit,
   checkRateLimit,
   consumeResetToken,
+  consumeVerificationToken,
   createResetToken,
   createSession,
+  createVerificationToken,
   currentUser,
   destroySession,
   hashPassword,
@@ -84,8 +86,102 @@ export const apiLogin = createServerFn({ method: "POST" })
       logEvent("warn", "login_failed", { userId: user.id, reason: "bad_password" });
       return fail;
     }
+    if (!user.emailVerifiedAt) {
+      logEvent("warn", "login_failed", { userId: user.id, reason: "email_not_verified" });
+      return {
+        ok: false as const,
+        error: "E-mail не подтверждён. Проверьте почту или запросите письмо повторно.",
+        needsVerification: true,
+      };
+    }
     await createSession(user.id);
     logEvent("info", "login_ok", { userId: user.id });
+    return { ok: true as const };
+  });
+
+// ——— Регистрация организации-партнёра (с подтверждением e-mail) ———
+async function sendVerificationEmail(userId: string, email: string, name: string) {
+  const token = await createVerificationToken(userId);
+  const appUrl = `${getRequestProtocol()}://${getRequestHost({ xForwardedHost: true })}`;
+  const res = await sendMail({
+    to: email,
+    subject: "DebtFlow: подтвердите e-mail",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:520px">
+        <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
+        <p>Здравствуйте, ${name}!</p>
+        <p>Подтвердите e-mail, чтобы активировать доступ вашей организации к DebtFlow.
+           Ссылка действует 24 часа.</p>
+        <p><a href="${appUrl}/verify-email?token=${token}"
+              style="background:#1B3A5C;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">
+          Подтвердить e-mail</a></p>
+        <p style="color:#888;font-size:12px">Если вы не регистрировались в DebtFlow — игнорируйте письмо.</p>
+      </div>`,
+  });
+  logEvent("info", "verification_email", { userId, mailSent: res.ok, mailError: res.error });
+  return res;
+}
+
+export const apiRegister = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      orgName: z.string().min(2).max(200),
+      orgType: z.enum(["COLLECTOR", "LEGAL_FIRM"]),
+      name: z.string().min(2).max(200),
+      email: z.string().email(),
+      password: z.string().min(8).max(200),
+    }),
+  )
+  .handler(async ({ data }) => {
+    assertSameOrigin();
+    const email = data.email.toLowerCase().trim();
+    const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
+    if (!(await checkRateLimit("register-ip", ip)).ok)
+      return { ok: false as const, error: "Слишком много регистраций. Попробуйте позже." };
+    if (await prisma.user.findUnique({ where: { email } }))
+      return { ok: false as const, error: "Этот e-mail уже зарегистрирован" };
+    // Новая организация-партнёр + её первый пользователь (менеджер, не подтверждён)
+    const org = await prisma.organization.create({
+      data: { name: data.orgName.trim(), type: data.orgType },
+    });
+    const user = await prisma.user.create({
+      data: {
+        orgId: org.id,
+        name: data.name.trim(),
+        email,
+        role: "MANAGER",
+        passwordHash: await hashPassword(data.password),
+        emailVerifiedAt: null,
+      },
+    });
+    logEvent("info", "org_registered", { orgId: org.id, userId: user.id, orgType: data.orgType });
+    await sendVerificationEmail(user.id, email, user.name);
+    return { ok: true as const };
+  });
+
+export const apiResendVerification = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => {
+    assertSameOrigin();
+    const email = data.email.toLowerCase().trim();
+    const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
+    if (!(await checkRateLimit("verify-ip", ip)).ok || !(await checkRateLimit("verify-email", email)).ok)
+      return { ok: true as const };
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user && !user.emailVerifiedAt) await sendVerificationEmail(user.id, email, user.name);
+    return { ok: true as const }; // не раскрываем существование адреса
+  });
+
+export const apiVerifyEmail = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ token: z.string().min(32).max(128) }))
+  .handler(async ({ data }) => {
+    assertSameOrigin();
+    const userId = await consumeVerificationToken(data.token);
+    if (!userId)
+      return { ok: false as const, error: "Ссылка недействительна или устарела. Запросите письмо повторно." };
+    await prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
+    await createSession(userId); // сразу входим после подтверждения
+    logEvent("info", "email_verified", { userId });
     return { ok: true as const };
   });
 
@@ -636,6 +732,8 @@ export const apiAddUser = createServerFn({ method: "POST" })
         email: data.email.toLowerCase().trim(),
         role: data.role,
         passwordHash: await hashPassword(data.password ?? "demo123"),
+        // Создан администратором своей организации — e-mail считается подтверждённым
+        emailVerifiedAt: new Date(),
       },
     });
     return { ok: true };
