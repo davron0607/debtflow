@@ -78,14 +78,15 @@ export async function checkLoginRateLimit(email: string): Promise<{ ok: boolean 
 }
 
 // ——— Токены сброса пароля (в БД — только SHA-256 хэш) ———
-const RESET_TTL_MS = 60 * 60_000; // 1 час
+const RESET_TTL_MS = 60 * 60_000; // 1 час (сброс пароля)
+export const INVITE_TTL_MS = 7 * 24 * 3600_000; // 7 дней (приглашение в команду)
 
 export const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
-export async function createResetToken(userId: string): Promise<string> {
+export async function createResetToken(userId: string, ttlMs = RESET_TTL_MS): Promise<string> {
   const token = randomBytes(32).toString("hex");
   await prisma.passwordResetToken.create({
-    data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + RESET_TTL_MS) },
+    data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) },
   });
   return token;
 }

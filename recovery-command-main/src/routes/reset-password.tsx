@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { z } from "zod";
@@ -6,13 +7,14 @@ import { LogoMark } from "@/components/logo";
 import { apiResetPassword } from "@/lib/api";
 
 export const Route = createFileRoute("/reset-password")({
-  validateSearch: z.object({ token: z.string().optional() }),
+  validateSearch: z.object({ token: z.string().optional(), welcome: z.coerce.number().optional() }),
   component: ResetPasswordPage,
 });
 
 function ResetPasswordPage() {
-  const { token } = Route.useSearch();
+  const { token, welcome } = Route.useSearch();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +28,8 @@ function ResetPasswordPage() {
     const res = await apiResetPassword({ data: { token: token ?? "", password } });
     if (!res.ok) return setError(res.error ?? "Ошибка");
     setDone(true);
-    setTimeout(() => navigate({ to: "/login" }), 2500);
+    await qc.invalidateQueries({ queryKey: ["snapshot"] });
+    setTimeout(() => navigate({ to: "/" }), 1800);
   };
 
   return (
@@ -38,7 +41,12 @@ function ResetPasswordPage() {
             Debt<span style={{ color: "#3E8E41" }}>Flow</span>
           </span>
         </div>
-        <h1 className="font-display text-xl font-bold">Новый пароль</h1>
+        <h1 className="font-display text-xl font-bold">{welcome ? "Добро пожаловать в DebtFlow" : "Новый пароль"}</h1>
+        {welcome ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Задайте пароль, чтобы активировать учётную запись.
+          </p>
+        ) : null}
         {!token ? (
           <p className="mt-4 text-sm text-muted-foreground">
             Ссылка неполная — перейдите по ссылке из письма или{" "}
@@ -49,7 +57,7 @@ function ResetPasswordPage() {
           </p>
         ) : done ? (
           <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-4 text-sm">
-            Пароль обновлён. Все прежние сессии завершены. Перенаправляем на вход…
+            {welcome ? "Учётная запись активирована — входим…" : "Пароль обновлён. Прежние сессии завершены — входим…"}
           </div>
         ) : (
           <form onSubmit={submit} className="mt-4 space-y-4">

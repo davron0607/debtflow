@@ -13,6 +13,7 @@ import {
   consumeVerificationToken,
   createResetToken,
   createSession,
+  INVITE_TTL_MS,
   createVerificationToken,
   currentUser,
   destroySession,
@@ -378,10 +379,12 @@ export const apiResetPassword = createServerFn({ method: "POST" })
     if (!userId) return { ok: false as const, error: "Ссылка недействительна или устарела. Запросите новую." };
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: await hashPassword(data.password) },
+      // Ссылка пришла на почту — владение ящиком подтверждено (важно для приглашений)
+      data: { passwordHash: await hashPassword(data.password), emailVerifiedAt: new Date() },
     });
-    // Инвалидация всех сессий после смены пароля
+    // Инвалидация всех прежних сессий + автологин с новым паролем
     await prisma.session.deleteMany({ where: { userId } });
+    await createSession(userId);
     logEvent("info", "password_reset_done", { userId });
     return { ok: true as const };
   });
@@ -426,7 +429,7 @@ export const apiSnapshot = createServerFn({ method: "GET" }).handler(async () =>
           : isBank(u)
           ? { OR: [{ orgId: u.orgId }, { org: { type: { in: ["COLLECTOR", "LEGAL_FIRM"] } } }] }
           : { OR: [{ orgId: u.orgId }, { org: { type: { in: ["BANK", "MFO"] } } }] },
-        select: { id: true, orgId: true, name: true, email: true, role: true, edsOperational: true, active: true },
+        select: { id: true, orgId: true, name: true, email: true, role: true, edsOperational: true, active: true, emailVerifiedAt: true },
       }),
       prisma.debtor.findMany({ where: { cases: { some: scope } } }),
       prisma.caseEvent.findMany({ where: inCase, orderBy: { createdAt: "desc" }, take: 2000 }),
@@ -441,7 +444,7 @@ export const apiSnapshot = createServerFn({ method: "GET" }).handler(async () =>
 
   const db: SnapshotDB = {
     orgs: orgs.map((o) => ({ id: o.id, name: o.name, type: o.type, status: o.status, domain: o.domain ?? undefined })),
-    users: users.map((x) => ({ ...x, edsOperational: x.edsOperational ?? undefined, role: x.role as UserRole })),
+    users: users.map((x) => ({ ...x, edsOperational: x.edsOperational ?? undefined, role: x.role as UserRole, emailVerifiedAt: x.emailVerifiedAt?.toISOString() })),
     debtors: debtors.map((d) => ({
       ...d,
       assetProfile: d.assetProfile ?? undefined,
@@ -867,7 +870,33 @@ export const apiCreateCases = createServerFn({ method: "POST" })
   });
 
 // ——— Пользователи: каждая организация управляет только своими ———
+// Модель доступа — invite-based provisioning (как в Slack/Notion/Stripe Teams):
+// админ вводит e-mail + роль, пароль сотрудник задаёт сам по ссылке из письма.
+// Дефолтных паролей не существует; клик по ссылке подтверждает владение почтой.
 const canManage = (u: User) => u.role === "BANK_ADMIN" || u.role === "MANAGER";
+
+async function sendInviteEmail(userId: string, email: string, name: string, orgName: string, roleLabel: string) {
+  const token = await createResetToken(userId, INVITE_TTL_MS);
+  const appUrl = `${getRequestProtocol()}://${getRequestHost({ xForwardedHost: true })}`;
+  const res = await sendMail({
+    to: email,
+    subject: `DebtFlow: вас пригласили в ${orgName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:520px">
+        <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
+        <p>Здравствуйте, ${name}!</p>
+        <p>Организация <b>${orgName}</b> открыла вам доступ к платформе DebtFlow
+           с ролью <b>${roleLabel}</b>.</p>
+        <p>Задайте пароль, чтобы активировать учётную запись. Ссылка действует 7 дней.</p>
+        <p><a href="${appUrl}/reset-password?token=${token}&welcome=1"
+              style="background:#1B3A5C;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">
+          Задать пароль и войти</a></p>
+        <p style="color:#888;font-size:12px">Единая операционная система взыскания · debtflow.uz</p>
+      </div>`,
+  });
+  logEvent("info", "invite_email", { userId, mailSent: res.ok, mailError: res.error });
+  return res;
+}
 
 export const apiAddUser = createServerFn({ method: "POST" })
   .inputValidator(
@@ -876,27 +905,47 @@ export const apiAddUser = createServerFn({ method: "POST" })
       name: z.string().min(1).max(200),
       email: z.string().email(),
       role: z.enum(["BANK_ADMIN", "BANK_LEGAL", "COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"]),
-      password: z.string().min(8).max(200).optional(),
     }),
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!canManage(u) || data.orgId !== u.orgId)
-      return { ok: false, error: "Недостаточно прав для этой организации" };
+      return { ok: false as const, error: "Недостаточно прав для этой организации" };
     const exists = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
-    if (exists) return { ok: false, error: "Пользователь с таким e-mail уже существует" };
-    await prisma.user.create({
+    if (exists) return { ok: false as const, error: "Пользователь с таким e-mail уже существует" };
+    const org = await prisma.organization.findUnique({ where: { id: u.orgId } });
+    const created = await prisma.user.create({
       data: {
         orgId: data.orgId,
         name: data.name.trim(),
         email: data.email.toLowerCase().trim(),
         role: data.role,
-        passwordHash: await hashPassword(data.password ?? "demo123"),
-        // Создан администратором своей организации — e-mail считается подтверждённым
-        emailVerifiedAt: new Date(),
+        // Пароль неизвестен никому: случайный хэш до принятия приглашения
+        passwordHash: await hashPassword(crypto.randomUUID() + crypto.randomUUID()),
+        emailVerifiedAt: null, // вход невозможен, пока не задан пароль по ссылке
       },
     });
-    return { ok: true };
+    const roleLabels: Record<string, string> = {
+      BANK_ADMIN: "Администратор банка", BANK_LEGAL: "Юрист банка", COLLECTOR: "Коллектор",
+      SOFT_COLLECTOR: "Soft-коллектор", HARD_COLLECTOR: "Hard-коллектор",
+      LEGAL_FIRM: "Юрист", MANAGER: "Менеджер", ACCOUNTANT: "Бухгалтер",
+    };
+    const mail = await sendInviteEmail(created.id, created.email, created.name, org?.name ?? "DebtFlow", roleLabels[data.role] ?? data.role);
+    return { ok: true as const, mailSent: mail.ok, mailError: mail.error };
+  });
+
+// Повторная отправка приглашения (пока оно не принято)
+export const apiResendInvite = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userId: z.string() }))
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    const target = await prisma.user.findUnique({ where: { id: data.userId }, include: { org: true } });
+    if (!target || !canManage(u) || target.orgId !== u.orgId)
+      return { ok: false as const, error: "Недостаточно прав" };
+    if (target.emailVerifiedAt)
+      return { ok: false as const, error: "Пользователь уже активировал учётную запись" };
+    const mail = await sendInviteEmail(target.id, target.email, target.name, target.org.name, target.role);
+    return { ok: true as const, mailSent: mail.ok, mailError: mail.error };
   });
 
 export const apiUpdateUser = createServerFn({ method: "POST" })

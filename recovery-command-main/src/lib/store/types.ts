@@ -69,6 +69,7 @@ export interface User {
   role: UserRole;
   edsOperational?: string; // "signedBy" attribute, removable
   active?: boolean; // false = доступ отключён; по умолчанию активен
+  emailVerifiedAt?: string; // null/undefined = приглашение ещё не принято
 }
 
 // Роли, доступные организации данного типа

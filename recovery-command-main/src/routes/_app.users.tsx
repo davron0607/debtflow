@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { UserPlus, Pencil, X, Check } from "lucide-react";
+import { UserPlus, Pencil, X, Check, Mail } from "lucide-react";
+import { apiResendInvite } from "@/lib/api";
 import { useStore } from "@/lib/store/store";
 import { ORG_ROLES, ROLE_LABEL, type User, type UserRole } from "@/lib/store/types";
 
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/_app/users")({
 
 function UsersPage() {
   const { db, currentUser, canManageUsers, manageableUsers, addUser, updateUser } = useStore();
+  const resendInvite = (userId: string) => apiResendInvite({ data: { userId } });
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -74,10 +76,15 @@ function UsersPage() {
           orgs={manageableOrgs.map((o) => ({ id: o.id, name: o.name, roles: ORG_ROLES[o.type] }))}
           onCancel={() => setShowAdd(false)}
           onSubmit={async (v) => {
-            const res = await addUser(v);
+            const res = (await addUser(v)) as { ok: boolean; error?: string; mailSent?: boolean; mailError?: string };
             if (res.ok) {
               setShowAdd(false);
-              flash("ok", `Пользователь ${v.name} создан. Пароль для демо-входа: demo123.`);
+              flash(
+                res.mailSent ? "ok" : "err",
+                res.mailSent
+                  ? `Приглашение отправлено на ${v.email}: сотрудник сам задаст пароль по ссылке (действует 7 дней).`
+                  : `Пользователь создан, но письмо не ушло${res.mailError ? ` (${res.mailError.slice(0, 120)})` : " — не настроен RESEND_API_KEY"}. Отправьте приглашение повторно после настройки почты.`,
+              );
             } else flash("err", res.error!);
           }}
         />
@@ -127,12 +134,26 @@ function UsersPage() {
                   <td className="p-3">
                     {u.active === false ? (
                       <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">отключён</span>
+                    ) : !u.emailVerifiedAt ? (
+                      <span className="rounded-full bg-money/10 px-2 py-0.5 text-xs text-money">приглашение не принято</span>
                     ) : (
                       <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">активен</span>
                     )}
                   </td>
                   <td className="p-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {!u.emailVerifiedAt && u.active !== false && (
+                        <button
+                          onClick={async () => {
+                            const res = (await resendInvite(u.id)) as { ok: boolean; error?: string; mailSent?: boolean };
+                            if (res.ok && res.mailSent) flash("ok", `Приглашение отправлено повторно на ${u.email}.`);
+                            else flash("err", res.error ?? "Письмо не ушло — проверьте настройку почты (RESEND_API_KEY).");
+                          }}
+                          className="flex items-center gap-1 rounded-md border border-primary/50 px-2 py-1 text-xs text-primary hover:bg-primary/10"
+                        >
+                          <Mail className="h-3 w-3" /> Пригласить снова
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setEditingId(u.id);
