@@ -1,4 +1,5 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Upload,
@@ -20,6 +21,8 @@ import {
   Inbox,
   ShieldCheck,
   Trophy,
+  Menu,
+  X,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { LogoMark } from "@/components/logo";
@@ -86,11 +89,54 @@ const NAV_GROUPS: NavGroup[] = [
 export function AppShell() {
   const { currentUser, setCurrentUserId, db, logout, demoMode } = useStore();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Закрываем мобильное меню при переходе
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   const visibleGroups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((n) => !n.roles || n.roles.includes(currentUser.role)),
   })).filter((g) => g.items.length > 0);
+
+  const navContent = (
+    <nav className="flex-1 space-y-3 overflow-y-auto p-2">
+      {visibleGroups.map((group) => (
+        <div key={group.title}>
+          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+            {group.title}
+          </div>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const active = pathname === item.to || pathname.startsWith(item.to + "/");
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    active && "bg-sidebar-accent text-sidebar-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge && (
+                    <span className="rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/70">
+                      {item.badge}
+                    </span>
+                  )}
+                  {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -106,40 +152,7 @@ export function AppShell() {
             <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">Recovery Decision Platform</div>
           </div>
         </div>
-        <nav className="flex-1 space-y-3 overflow-y-auto p-2">
-          {visibleGroups.map((group) => (
-            <div key={group.title}>
-              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
-                {group.title}
-              </div>
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active = pathname === item.to || pathname.startsWith(item.to + "/");
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                        active && "bg-sidebar-accent text-sidebar-foreground",
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge && (
-                        <span className="rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/70">
-                          {item.badge}
-                        </span>
-                      )}
-                      {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
+        {navContent}
         <div className="border-t border-sidebar-border p-3 text-[10px] text-sidebar-foreground/60">
           Нейтральный слой координации.<br />Принуждение — только МИБ.
         </div>
@@ -149,6 +162,13 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center gap-4 border-b border-border bg-surface px-5">
           <div className="flex items-center gap-2 lg:hidden">
+            <button
+              onClick={() => setMobileNavOpen((v) => !v)}
+              aria-label={mobileNavOpen ? "Закрыть меню" : "Открыть меню"}
+              className="rounded-md border border-border p-2 text-foreground hover:bg-accent"
+            >
+              {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
             <LogoMark size={24} />
             <span className="font-display text-sm font-bold">DebtFlow</span>
           </div>
@@ -195,6 +215,16 @@ export function AppShell() {
             </button>
           </div>
         </header>
+
+        {/* Мобильное меню: раскрывающаяся панель под шапкой */}
+        {mobileNavOpen && (
+          <div className="flex max-h-[70vh] flex-col overflow-y-auto border-b border-sidebar-border bg-sidebar lg:hidden">
+            {navContent}
+            <div className="border-t border-sidebar-border p-3 text-[10px] text-sidebar-foreground/60">
+              {currentUser.name} · {db.orgs.find((o) => o.id === currentUser.orgId)?.name}
+            </div>
+          </div>
+        )}
 
         {db.orgs.find((o) => o.id === currentUser.orgId)?.status === "PENDING" && (
           <div className="border-b border-money/40 bg-money/10 px-5 py-2 text-xs">
