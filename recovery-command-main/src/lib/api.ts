@@ -637,6 +637,22 @@ export const apiAssignUser = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+// Коллектор сам берёт нераспределённое дело из пула своей организации
+export const apiTakeCase = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ caseId: z.string() }))
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    const workRoles = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"];
+    if (!workRoles.includes(u.role)) forbid("Взять дело может коллектор или юрист");
+    const c = await prisma.case.findFirst({ where: { id: data.caseId, assignedOrgId: u.orgId } });
+    if (!c) forbid("Дело не назначено вашей организации");
+    if (c.assignedUserId)
+      return { ok: false as const, error: "Дело уже взял другой сотрудник" };
+    await prisma.case.update({ where: { id: c.id }, data: { assignedUserId: u.id } });
+    await audit(u.id, c.id, "ASSIGNED_USER", { toUserId: u.id, toUserName: u.name, selfTake: true });
+    return { ok: true as const };
+  });
+
 // ——— Работа коллектора ———
 export const apiLogContact = createServerFn({ method: "POST" })
   .inputValidator(

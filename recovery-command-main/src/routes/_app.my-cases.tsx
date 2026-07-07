@@ -16,9 +16,14 @@ const ACCOUNTANT_STATUSES: CaseStatus[] = ["PROMISE_TO_PAY", "PARTIALLY_PAID", "
 
 function MyCases() {
   const { db, scopedCases, currentUser } = useStore();
-  const cases = scopedCases();
+  const isWorker = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"].includes(currentUser.role);
+  const orgCases = scopedCases();
+  // Коллектор/юрист видит в работе только СВОИ дела; менеджер/бухгалтер — всей организации
+  const cases = isWorker ? orgCases.filter((c) => c.assignedUserId === currentUser.id) : orgCases;
+  const poolCount = isWorker
+    ? orgCases.filter((c) => !c.assignedUserId && !["PAID", "CLOSED", "WRITTEN_OFF", "RESTRUCTURED"].includes(c.status)).length
+    : 0;
   const isAccountant = currentUser.role === "ACCOUNTANT";
-  const isCollectorRole = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"].includes(currentUser.role);
   const [statusFilter, setStatusFilter] = useState<CaseStatus | "ALL" | "ACC" | "MINE">(
     isAccountant ? "ACC" : "ALL",
   );
@@ -66,9 +71,22 @@ function MyCases() {
         <p className="text-sm text-muted-foreground">
           {isAccountant
             ? "По умолчанию — дела со сроками оплаты и оплаты на подтверждении."
+            : isWorker
+            ? "Только дела, распределённые на вас. Нераспределённые — в пуле организации (Очередь задач)."
             : "Приоритизировано: сначала не взятые в работу, затем проблемные и высокий DPD."}
         </p>
       </div>
+
+      {isWorker && poolCount > 0 && (
+        <Link
+          to="/queue"
+          className="mb-4 flex items-center gap-2 rounded-md border border-primary/50 bg-primary/5 px-3 py-2 text-sm hover:bg-primary/10"
+        >
+          <span>
+            📥 В пуле организации <b>{poolCount}</b> нераспределённых дел — возьмите в работу в «Очереди задач».
+          </span>
+        </Link>
+      )}
 
       {notTaken > 0 && !isAccountant && (
         <div className="mb-4 flex items-center gap-2 rounded-md border border-money/50 bg-money/10 px-3 py-2 text-sm">
@@ -84,11 +102,6 @@ function MyCases() {
         <Chip active={statusFilter === "ALL"} onClick={() => setStatusFilter("ALL")}>
           Все · {cases.length}
         </Chip>
-        {isCollectorRole && (
-          <Chip active={statusFilter === "MINE"} onClick={() => setStatusFilter(statusFilter === "MINE" ? "ALL" : "MINE")}>
-            👤 Назначенные мне · {cases.filter((c) => c.assignedUserId === currentUser.id).length}
-          </Chip>
-        )}
         {isAccountant && (
           <Chip active={statusFilter === "ACC"} onClick={() => setStatusFilter("ACC")}>
             💰 К оплате/подтверждению · {cases.filter((c) => ACCOUNTANT_STATUSES.includes(c.status)).length}

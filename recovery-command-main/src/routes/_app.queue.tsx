@@ -14,7 +14,8 @@ export const Route = createFileRoute("/_app/queue")({
 
 function QueuePage() {
   const store = useStore();
-  const { db, currentUser, scopedCases } = store;
+  const { db, currentUser, scopedCases, takeCase } = store;
+  const isWorker = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"].includes(currentUser.role);
   const navigate = useNavigate();
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -22,11 +23,13 @@ function QueuePage() {
 
   const items = useMemo(() => {
     const rows = scopedCases()
+      // Коллектор видит рекомендации только по своим делам
+      .filter((c) => !isWorker || c.assignedUserId === currentUser.id)
       .map((c) => ({ c, r: caseReco(db, c) }))
       .filter((x): x is { c: Case; r: CaseReco } => !!x.r && x.r.approverRoles.includes(currentUser.role))
       .sort((a, b) => b.r.expectedRecoveryUSD * (b.r.confidence / 100) - a.r.expectedRecoveryUSD * (a.r.confidence / 100));
     return rows;
-  }, [db, scopedCases, currentUser.role]);
+  }, [db, scopedCases, currentUser.role, currentUser.id, isWorker]);
 
   const transfers = db.transfers.filter(
     (t) =>
@@ -129,6 +132,49 @@ function QueuePage() {
           </div>
         </div>
       )}
+
+      {/* Пул организации: нераспределённые дела — можно взять себе */}
+      {isWorker && (() => {
+        const pool = scopedCases().filter(
+          (c) => !c.assignedUserId && !["PAID", "CLOSED", "WRITTEN_OFF", "RESTRUCTURED"].includes(c.status),
+        );
+        if (pool.length === 0) return null;
+        return (
+          <div className="mb-4 rounded-lg border border-primary/40 bg-primary/5 p-4">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-primary">
+              📥 Пул организации · {pool.length} нераспределённых дел
+            </div>
+            <div className="space-y-2">
+              {pool.slice(0, 8).map((c) => {
+                const d = db.debtors.find((x) => x.id === c.debtorId);
+                return (
+                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2">
+                    <div className="min-w-0">
+                      <Link to="/cases/$id" params={{ id: c.id }} className="font-mono text-xs text-primary hover:underline">
+                        {c.code}
+                      </Link>
+                      <span className="ml-2 text-sm font-medium">{d?.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">DPD {c.dpd} · {fmtUSD(c.amountUSD)}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const r = await takeCase(c.id);
+                        if (!r.ok && r.error) alert(r.error);
+                      }}
+                      className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    >
+                      Взять в работу
+                    </button>
+                  </div>
+                );
+              })}
+              {pool.length > 8 && (
+                <div className="text-xs text-muted-foreground">…и ещё {pool.length - 8} в пуле</div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Фильтр и сводка по статусам */}
       {items.length > 0 && (

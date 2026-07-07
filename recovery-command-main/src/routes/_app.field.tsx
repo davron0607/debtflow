@@ -44,10 +44,10 @@ function FieldPage() {
     "ASSIGNED", "SOFT_COLLECTION", "CONTACTED", "NO_CONTACT",
     "PROMISE_TO_PAY", "PROMISE_BROKEN", "PARTIALLY_PAID",
   ]);
-  // Маршрут строится по делам, распределённым на меня (или ещё не распределённым)
+  // Маршрут строится только по делам, распределённым на меня
   const route = scopedCases()
     .filter((c) => WORKABLE.has(c.status))
-    .filter((c) => !c.assignedUserId || c.assignedUserId === currentUser.id)
+    .filter((c) => c.assignedUserId === currentUser.id)
     .sort((a, b) => b.dpd - a.dpd);
 
   const getPosition = (): Promise<{ lat: number; lng: number }> =>
