@@ -18,6 +18,7 @@ import {
   Smartphone,
   MapPinned,
   Inbox,
+  ShieldCheck,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { LogoMark } from "@/components/logo";
@@ -25,6 +26,7 @@ import { ROLE_LABEL, type UserRole } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
 
 const ORG_TYPE_LABEL: Record<string, string> = {
+  PLATFORM: "Оператор платформы",
   BANK: "Банк-тенант",
   MFO: "МФО",
   COLLECTOR: "Коллекторское агентство",
@@ -70,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Администрирование",
     items: [
+      { to: "/moderation", label: "Модерация организаций", icon: ShieldCheck, roles: ["PLATFORM_ADMIN"] },
       { to: "/users", label: "Пользователи и роли", icon: UserCog, roles: ["BANK_ADMIN", "MANAGER"] },
       { to: "/audit", label: "Аудит-журнал", icon: ScrollText },
       { to: "/mib", label: "МИБ / БПИ", icon: Radio, badge: "V2" },
@@ -191,6 +194,12 @@ export function AppShell() {
           </div>
         </header>
 
+        {db.orgs.find((o) => o.id === currentUser.orgId)?.status === "PENDING" && (
+          <div className="border-b border-money/40 bg-money/10 px-5 py-2 text-xs">
+            ⏳ Организация на проверке оператором платформы. Просмотр доступен; загрузка портфеля и
+            назначения откроются после одобрения — уведомим по e-mail.
+          </div>
+        )}
         <main className="min-w-0 flex-1 overflow-x-hidden bg-background">
           <Outlet />
         </main>

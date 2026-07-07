@@ -50,7 +50,9 @@ function RegisterPage() {
             <h1 className="font-display text-xl font-bold">Проверьте почту</h1>
             <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-4 text-sm">
               Мы отправили письмо на <b>{email}</b>. Перейдите по ссылке из письма, чтобы
-              подтвердить e-mail и активировать доступ. Ссылка действует 24 часа.
+              подтвердить e-mail. Ссылка действует 24 часа.
+              {isFinancial &&
+                " После подтверждения заявка банка/МФО уходит на проверку оператору платформы — о решении сообщим письмом."}
             </div>
             <Link to="/login" className="mt-4 block text-center text-xs text-primary hover:underline">
               ← Ко входу

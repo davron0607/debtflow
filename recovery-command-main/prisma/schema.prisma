@@ -16,9 +16,17 @@ enum OrgType {
   MFO
   COLLECTOR
   LEGAL_FIRM
+  PLATFORM
+}
+
+enum OrgStatus {
+  PENDING
+  ACTIVE
+  REJECTED
 }
 
 enum UserRole {
+  PLATFORM_ADMIN
   BANK_ADMIN
   BANK_LEGAL
   COLLECTOR
@@ -102,6 +110,7 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   type      OrgType
+  status    OrgStatus @default(ACTIVE) // банки/МФО создаются в PENDING до одобрения оператором
   domain    String?  // официальный домен (антифрод-проверка для банков/МФО)
   createdAt DateTime @default(now())
 

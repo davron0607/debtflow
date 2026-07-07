@@ -184,8 +184,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scopedVisits,
       canManageUsers,
       manageableUsers,
-      addUser: (input) => call(apiAddUser({ data: input }), invalidate),
-      updateUser: (id, patch) => call(apiUpdateUser({ data: { id, ...patch } }), invalidate),
+      // PLATFORM_ADMIN не создаётся через UI — только bootstrap-скриптом
+      addUser: (input) =>
+        call(apiAddUser({ data: { ...input, role: input.role as Exclude<UserRole, "PLATFORM_ADMIN"> } }), invalidate),
+      updateUser: (id, patch) =>
+        call(
+          apiUpdateUser({ data: { id, ...patch, role: patch.role as Exclude<UserRole, "PLATFORM_ADMIN"> | undefined } }),
+          invalidate,
+        ),
       transitionStatus: (caseId, to, reason) =>
         call(apiTransition({ data: { caseId, to, reason } }), invalidate),
       assignCase: (caseId, toOrgId, _toUserId, reason) =>

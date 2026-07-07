@@ -1,6 +1,8 @@
-export type OrgType = "BANK" | "MFO" | "COLLECTOR" | "LEGAL_FIRM";
+export type OrgType = "BANK" | "MFO" | "COLLECTOR" | "LEGAL_FIRM" | "PLATFORM";
+export type OrgStatus = "PENDING" | "ACTIVE" | "REJECTED";
 
 export type UserRole =
+  | "PLATFORM_ADMIN"
   | "BANK_ADMIN"
   | "BANK_LEGAL"
   | "COLLECTOR"
@@ -11,6 +13,7 @@ export type UserRole =
   | "ACCOUNTANT";
 
 export const ROLE_LABEL: Record<UserRole, string> = {
+  PLATFORM_ADMIN: "Оператор платформы",
   BANK_ADMIN: "Администратор банка",
   BANK_LEGAL: "Юрист банка",
   COLLECTOR: "Коллектор (агентство)",
@@ -54,6 +57,8 @@ export interface Organization {
   id: string;
   name: string;
   type: OrgType;
+  status?: OrgStatus;
+  domain?: string;
 }
 
 export interface User {
@@ -68,6 +73,7 @@ export interface User {
 
 // Роли, доступные организации данного типа
 export const ORG_ROLES: Record<OrgType, UserRole[]> = {
+  PLATFORM: ["PLATFORM_ADMIN"],
   BANK: ["BANK_ADMIN", "BANK_LEGAL", "SOFT_COLLECTOR", "HARD_COLLECTOR"],
   MFO: ["BANK_ADMIN", "BANK_LEGAL", "SOFT_COLLECTOR", "HARD_COLLECTOR"],
   COLLECTOR: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "MANAGER", "ACCOUNTANT", "LEGAL_FIRM"],

@@ -18,6 +18,7 @@ import {
   destroySession,
   hashPassword,
   isDemoMode,
+  requireUser,
   requireUserMutation,
   verifyPassword,
 } from "./backend/auth";
@@ -41,7 +42,17 @@ function forbid(msg = "FORBIDDEN"): never {
 // все исполнители (агентства, юрфирмы, внутрибанковские коллекторы) —
 // только дела, назначенные их организации.
 function caseScope(u: User): Prisma.CaseWhereInput {
+  if (u.role === "PLATFORM_ADMIN") return { id: "__none__" }; // оператор не видит дела
   return isBank(u) ? { tenantBankId: u.orgId } : { assignedOrgId: u.orgId };
+}
+
+// Организация должна быть одобрена оператором платформы (банки/МФО)
+async function requireActiveOrg(u: User) {
+  const org = await prisma.organization.findUnique({ where: { id: u.orgId } });
+  if (!org || org.status === "PENDING")
+    forbid("Организация на проверке оператором платформы — действие пока недоступно");
+  if (org.status === "REJECTED") forbid("Заявка организации отклонена");
+  return org;
 }
 
 async function requireCaseInScope(u: User, caseId: string) {
@@ -195,7 +206,8 @@ export const apiRegister = createServerFn({ method: "POST" })
 
     // Новая организация + её первый пользователь (не подтверждён до клика в письме)
     const org = await prisma.organization.create({
-      data: { name: data.orgName.trim(), type: data.orgType, domain: orgDomain },
+      // Банки/МФО после подтверждения e-mail проходят модерацию оператором платформы
+      data: { name: data.orgName.trim(), type: data.orgType, domain: orgDomain, status: isFinancial ? "PENDING" : "ACTIVE" },
     });
     const user = await prisma.user.create({
       data: {
@@ -235,6 +247,91 @@ export const apiVerifyEmail = createServerFn({ method: "POST" })
     await prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
     await createSession(userId); // сразу входим после подтверждения
     logEvent("info", "email_verified", { userId });
+    return { ok: true as const };
+  });
+
+// ——— Модерация организаций (оператор платформы) ———
+export const apiModerationList = createServerFn({ method: "GET" }).handler(async () => {
+  const u = await requireUser();
+  if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
+  const orgs = await prisma.organization.findMany({
+    where: { status: { in: ["PENDING", "REJECTED"] } },
+    include: {
+      users: {
+        select: { name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true },
+        take: 1,
+        orderBy: { createdAt: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return orgs.map((o) => ({
+    id: o.id,
+    name: o.name,
+    type: o.type,
+    status: o.status,
+    domain: o.domain,
+    createdAt: o.createdAt.toISOString(),
+    admin: o.users[0]
+      ? {
+          name: o.users[0].name,
+          email: o.users[0].email,
+          emailVerified: !!o.users[0].emailVerifiedAt,
+        }
+      : null,
+  }));
+});
+
+export const apiModerateOrg = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      orgId: z.string(),
+      decision: z.enum(["APPROVE", "REJECT"]),
+      reason: z.string().max(1000).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
+    const org = await prisma.organization.findUnique({
+      where: { id: data.orgId },
+      include: { users: { orderBy: { createdAt: "asc" }, take: 1 } },
+    });
+    if (!org) return { ok: false as const, error: "Организация не найдена" };
+    if (data.decision === "REJECT" && !data.reason?.trim())
+      return { ok: false as const, error: "Для отклонения обязательна причина" };
+    const status = data.decision === "APPROVE" ? "ACTIVE" : "REJECTED";
+    await prisma.organization.update({ where: { id: org.id }, data: { status } });
+    logEvent("info", "org_moderated", {
+      orgId: org.id,
+      decision: data.decision,
+      byUserId: u.id,
+      reason: data.reason,
+    });
+    const admin = org.users[0];
+    if (admin) {
+      await sendMail({
+        to: admin.email,
+        subject:
+          data.decision === "APPROVE"
+            ? "DebtFlow: организация одобрена"
+            : "DebtFlow: заявка отклонена",
+        html:
+          data.decision === "APPROVE"
+            ? `<div style="font-family:Arial,sans-serif;max-width:520px">
+                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
+                 <p>Здравствуйте, ${admin.name}!</p>
+                 <p>Организация <b>${org.name}</b> прошла проверку. Полный доступ открыт:
+                    загрузка портфеля, назначения, работа с делами.</p>
+               </div>`
+            : `<div style="font-family:Arial,sans-serif;max-width:520px">
+                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
+                 <p>Здравствуйте, ${admin.name}!</p>
+                 <p>К сожалению, заявка организации <b>${org.name}</b> отклонена.</p>
+                 <p>Причина: ${data.reason}</p>
+               </div>`,
+      });
+    }
     return { ok: true as const };
   });
 
@@ -343,7 +440,7 @@ export const apiSnapshot = createServerFn({ method: "GET" }).handler(async () =>
     ]);
 
   const db: SnapshotDB = {
-    orgs: orgs.map((o) => ({ id: o.id, name: o.name, type: o.type })),
+    orgs: orgs.map((o) => ({ id: o.id, name: o.name, type: o.type, status: o.status, domain: o.domain ?? undefined })),
     users: users.map((x) => ({ ...x, edsOperational: x.edsOperational ?? undefined, role: x.role as UserRole })),
     debtors: debtors.map((d) => ({
       ...d,
@@ -478,6 +575,7 @@ export const apiAssign = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Назначает только администратор банка");
+    await requireActiveOrg(u);
     // Тенант-скоуп: банк распоряжается только собственным портфелем
     const c = await prisma.case.findFirst({ where: { id: data.caseId, tenantBankId: u.orgId } });
     if (!c) forbid("Дело не найдено или недоступно");
@@ -736,6 +834,7 @@ export const apiCreateCases = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (u.role !== "BANK_ADMIN") forbid("Портфель загружает администратор банка");
+    await requireActiveOrg(u);
     // Дела создаются в портфеле собственного банка (мультитенантность)
     const bank = await prisma.organization.findUnique({ where: { id: u.orgId } });
     if (!bank || (bank.type !== "BANK" && bank.type !== "MFO")) forbid();

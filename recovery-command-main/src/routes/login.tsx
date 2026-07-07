@@ -32,6 +32,7 @@ function LoginPage() {
   // Демо-учётки (пароль demo123) — список статический: до входа сервер
   // не раскрывает пользователей
   const demoUsers = [
+    { email: "ops@debtflow.uz", label: "Оператор платформы", org: "DebtFlow" },
     { email: "admin@tengebank.uz", label: "Администратор банка", org: "Tenge Bank" },
     { email: "legal@tengebank.uz", label: "Юрист банка", org: "Tenge Bank" },
     { email: "aziz@alpha-collect.uz", label: "Коллектор", org: 'КА "Альфа-Взыскание"' },

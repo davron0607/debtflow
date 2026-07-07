@@ -26,6 +26,7 @@ let idc = 0;
 const id = (p: string) => `${p}_${(++idc).toString(36)}`;
 
 const orgs: Organization[] = [
+  { id: "org_platform", name: "DebtFlow", type: "PLATFORM" },
   { id: BANK_ID, name: "Tenge Bank", type: "BANK" },
   { id: AGENCY_A_ID, name: 'КА "Альфа-Взыскание"', type: "COLLECTOR" },
   { id: AGENCY_B_ID, name: 'КА "Бета-Ресурс"', type: "COLLECTOR" },
@@ -33,6 +34,7 @@ const orgs: Organization[] = [
 ];
 
 const users: User[] = [
+  { id: "u_platform", orgId: "org_platform", name: "Оператор DebtFlow", email: "ops@debtflow.uz", role: "PLATFORM_ADMIN" },
   { id: "u_admin", orgId: BANK_ID, name: "Дилшод Каримов", email: "admin@tengebank.uz", role: "BANK_ADMIN" },
   { id: "u_legal", orgId: BANK_ID, name: "Мадина Юсупова", email: "legal@tengebank.uz", role: "BANK_LEGAL", edsOperational: "EDS-TB-0042" },
   { id: "u_collector_a", orgId: AGENCY_A_ID, name: "Азиз Рахимов", email: "aziz@alpha-collect.uz", role: "COLLECTOR" },
