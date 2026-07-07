@@ -178,8 +178,16 @@ function QueuePage() {
                     {r.reasons.join(" · ")}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 items-center gap-4">
                   <div className="text-right">
+                    <div className="text-[10px] uppercase text-muted-foreground">Долг</div>
+                    <div className="font-mono text-sm">{fmtUSD(c.amountUSD)}</div>
+                  </div>
+                  <div
+                    className="text-right"
+                    title={`Ожидаемый возврат = долг ${fmtUSD(c.amountUSD)} × P(взыскания) ${r.probability}%`}
+                  >
+                    <div className="text-[10px] uppercase text-muted-foreground">Ожид. возврат</div>
                     <div className="font-mono text-sm text-money">≈ {fmtUSD(r.expectedRecoveryUSD)}</div>
                     <div className="text-[10px] text-muted-foreground">уверенность {r.confidence}%</div>
                   </div>
