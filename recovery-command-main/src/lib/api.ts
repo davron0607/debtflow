@@ -64,6 +64,16 @@ async function requireCaseInScope(u: User, caseId: string) {
   return c;
 }
 
+// Рядовой коллектор (в отличие от MANAGER/BANK_ADMIN) может работать только
+// со своими делами — иначе кто угодно из организации может зафиксировать
+// контакт/платёж по чужому делу.
+function requireOwnCase<T extends { assignedUserId: string | null }>(u: User, c: T): T {
+  if (isCollector(u) && c.assignedUserId && c.assignedUserId !== u.id) {
+    forbid("Дело назначено другому сотруднику");
+  }
+  return c;
+}
+
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : undefined);
 
 // ——— Аудит: единственный путь записи событий (append-only) ———
@@ -595,13 +605,15 @@ export const apiLogContact = createServerFn({ method: "POST" })
       caseId: z.string(),
       note: z.string().max(2000),
       result: z.enum(["CONTACTED", "NO_CONTACT"]),
+      channel: z.enum(["CALL", "SMS", "VISIT", "EMAIL", "OTHER"]).optional(),
+      nextContactAt: z.string().optional(),
     }),
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
-    const c = await requireCaseInScope(u, data.caseId);
-    await audit(u.id, c.id, "CONTACT_LOGGED", { note: data.note, result: data.result });
+    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
+    await audit(u.id, c.id, "CONTACT_LOGGED", { note: data.note, result: data.result, channel: data.channel, nextContactAt: data.nextContactAt });
     if (
       (c.status === "ASSIGNED" || c.status === "SOFT_COLLECTION") &&
       canTransition(c.status as CaseStatus, data.result, u.role as UserRole)
@@ -623,7 +635,7 @@ export const apiLogPromise = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
-    const c = await requireCaseInScope(u, data.caseId);
+    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
     await prisma.$transaction([
       prisma.payment.create({
         data: { caseId: c.id, amountUSD: data.amountUSD, kind: "PROMISE", promisedDate: new Date(data.promisedDate) },
@@ -650,13 +662,26 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (!isCollector(u) && u.role !== "BANK_ADMIN" && u.role !== "ACCOUNTANT") forbid();
-    const c = await requireCaseInScope(u, data.caseId);
+    // Бухгалтер здесь ни при чём: его функция — согласование переводов
+    // (см. apiApproveTransfer), а не подтверждение оплаты по делу.
+    if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
+    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
+    const priorPayments = await prisma.payment.findMany({
+      where: { caseId: c.id, kind: { in: ["FULL", "PARTIAL"] }, paidAt: { not: null } },
+      select: { amountUSD: true },
+    });
+    const paidSoFar = priorPayments.reduce((s, p) => s + p.amountUSD, 0);
+    const remaining = c.amountUSD - paidSoFar;
+    if (data.amountUSD > remaining)
+      return { ok: false as const, error: `Сумма превышает остаток к взысканию (${remaining} USD)` };
+
     await prisma.payment.create({
       data: { caseId: c.id, amountUSD: data.amountUSD, kind: data.kind, paidAt: new Date() },
     });
     await audit(u.id, c.id, "PAYMENT_RECORDED", { amountUSD: data.amountUSD, kind: data.kind });
-    const to = data.kind === "FULL" ? "PAID" : "PARTIALLY_PAID";
+    // Статус определяется фактическим остатком, а не заявленным kind — иначе
+    // "Полностью" на неполную сумму преждевременно закрывает дело.
+    const to = remaining - data.amountUSD <= 0 ? "PAID" : "PARTIALLY_PAID";
     if (canTransition(c.status as CaseStatus, to, u.role as UserRole)) {
       await prisma.case.update({ where: { id: c.id }, data: { status: to } });
       await audit(u.id, c.id, "STATUS_CHANGED", { from: c.status, to });

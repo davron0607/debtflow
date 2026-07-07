@@ -12,6 +12,7 @@ import {
   Wallet,
   ClipboardList,
   Building2,
+  ArrowRight,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { fmtUSD, fmtUZS, fmtDateTime, fmtDate } from "@/lib/format";
@@ -20,7 +21,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { LifecycleSpine } from "@/components/lifecycle-spine";
 import { DecisionPanel } from "@/components/decision-panel";
 import { PaymentChart } from "@/components/payment-chart";
-import type { CaseStatus, DocumentKind } from "@/lib/store/types";
+import { caseReco } from "@/lib/decision-engine";
+import type { Case, CaseEvent, CaseStatus, DB, DocumentKind, SlaTimer } from "@/lib/store/types";
 
 export const Route = createFileRoute("/_app/cases_/$id")({
   component: CaseDetail,
@@ -53,6 +55,8 @@ function CaseDetail() {
   const [reason, setReason] = useState("");
   const [pendingStatus, setPendingStatus] = useState<CaseStatus | null>(null);
   const [contactNote, setContactNote] = useState("");
+  const [contactChannel, setContactChannel] = useState<"CALL" | "SMS" | "VISIT" | "EMAIL" | "OTHER">("CALL");
+  const [nextContactAt, setNextContactAt] = useState("");
   const [promiseDate, setPromiseDate] = useState("");
   const [promiseAmt, setPromiseAmt] = useState("");
   const [paymentAmt, setPaymentAmt] = useState("");
@@ -80,6 +84,7 @@ function CaseDetail() {
   const transitions = allowedTransitions(c.status, currentUser.role);
   const totalCosts = costs.reduce((s, k) => s + k.amountUSD, 0);
   const totalPaid = payments.filter((p) => p.paidAt).reduce((s, p) => s + p.amountUSD, 0);
+  const remaining = Math.max(0, c.amountUSD - totalPaid);
 
   const commitTransition = (to: CaseStatus) => {
     const destructive = to === "WRITTEN_OFF" || to === "CLOSED";
@@ -116,6 +121,10 @@ function CaseDetail() {
               <span>ПИНФЛ <span className="font-mono text-foreground">{debtor?.pinfl}</span></span>
               <span>Тел. <span className="font-mono text-foreground">{debtor?.phone}</span></span>
               <span>{debtor?.address}</span>
+              <span>
+                Срок возврата по договору: <span className="font-mono text-foreground">{fmtDate(c.originatedAt)}</span>
+                {" "}(просрочка {c.dpd} дн.)
+              </span>
             </div>
           </div>
           <div className="text-right">
@@ -173,6 +182,8 @@ function CaseDetail() {
           </div>
         </div>
 
+        <ActionTrail c={c} events={events} slas={slas} db={db} />
+
         <DecisionPanel c={c} />
 
         {/* State transitions */}
@@ -227,29 +238,53 @@ function CaseDetail() {
           </div>
         )}
 
-        {/* Collector / accountant inline actions */}
-        {(["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"].includes(currentUser.role) ||
-          currentUser.role === "ACCOUNTANT") &&
+        {/* Работа на деле — только фронтлайн-роли (не бухгалтер: его функция — согласование переводов, см. вкладку "Затраты"/трансферы) */}
+        {["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"].includes(currentUser.role) &&
           c.assignedOrgId === currentUser.orgId && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            {currentUser.role !== "ACCOUNTANT" && (<>
             <div className="rounded-md border border-border bg-surface-2 p-3">
               <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Лог контакта</div>
+              <select
+                value={contactChannel}
+                onChange={(e) => setContactChannel(e.target.value as typeof contactChannel)}
+                className="mb-2 w-full rounded border border-input bg-background p-1.5 text-xs"
+              >
+                <option value="CALL">Звонок</option>
+                <option value="SMS">SMS</option>
+                <option value="VISIT">Визит</option>
+                <option value="EMAIL">E-mail</option>
+                <option value="OTHER">Другое</option>
+              </select>
               <textarea
                 value={contactNote}
                 onChange={(e) => setContactNote(e.target.value)}
                 placeholder="Кратко: что обсудили, обещания, отговорки"
                 className="mb-2 h-16 w-full rounded border border-input bg-background p-2 text-xs"
               />
+              <label className="mb-2 block text-[11px] text-muted-foreground">
+                Следующий контакт
+                <input
+                  type="date"
+                  value={nextContactAt}
+                  onChange={(e) => setNextContactAt(e.target.value)}
+                  className="mt-1 w-full rounded border border-input bg-background p-1.5 text-xs"
+                />
+              </label>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { logContact(c.id, contactNote || "Контакт", "CONTACTED"); setContactNote(""); }}
+                  onClick={() => {
+                    logContact(c.id, contactNote || "Контакт", "CONTACTED", contactChannel, nextContactAt || undefined);
+                    setContactNote(""); setNextContactAt("");
+                  }}
                   className="flex-1 rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
                 >
                   Контакт есть
                 </button>
                 <button
-                  onClick={() => { logContact(c.id, contactNote || "Не отвечает", "NO_CONTACT"); setContactNote(""); }}
+                  onClick={() => {
+                    logContact(c.id, contactNote || "Не отвечает", "NO_CONTACT", contactChannel, nextContactAt || undefined);
+                    setContactNote(""); setNextContactAt("");
+                  }}
                   className="flex-1 rounded border border-destructive/40 px-2 py-1 text-xs text-destructive"
                 >
                   Нет контакта
@@ -270,27 +305,27 @@ function CaseDetail() {
                 Зафиксировать обещание
               </button>
             </div>
-            </>)}
             <div className="rounded-md border border-border bg-surface-2 p-3">
-              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-                {currentUser.role === "ACCOUNTANT" ? "Подтверждение оплаты" : "Записать платёж"}
-              </div>
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Записать платёж</div>
+              <div className="mb-2 text-[11px] text-muted-foreground">Остаток: {fmtUSD(remaining)}</div>
               <input type="number" value={paymentAmt} onChange={(e) => setPaymentAmt(e.target.value)} placeholder="Сумма USD"
+                max={remaining}
                 className="mb-2 w-full rounded border border-input bg-background p-1.5 text-xs" />
               <div className="flex gap-2">
                 <button
-                  disabled={!paymentAmt}
+                  disabled={!paymentAmt || Number(paymentAmt) > remaining}
                   onClick={() => { recordPayment(c.id, Number(paymentAmt), "PARTIAL"); setPaymentAmt(""); }}
                   className="flex-1 rounded border border-primary/40 px-2 py-1 text-xs text-primary disabled:opacity-40"
                 >
                   Частично
                 </button>
                 <button
-                  disabled={!paymentAmt}
-                  onClick={() => { recordPayment(c.id, Number(paymentAmt), "FULL"); setPaymentAmt(""); }}
+                  disabled={remaining <= 0}
+                  title={`Списать остаток целиком: ${fmtUSD(remaining)}`}
+                  onClick={() => { recordPayment(c.id, remaining, "FULL"); setPaymentAmt(""); }}
                   className="flex-1 rounded bg-success px-2 py-1 text-xs text-success-foreground disabled:opacity-40"
                 >
-                  Полностью
+                  Полностью ({fmtUSD(remaining)})
                 </button>
               </div>
               {c.status === "PAID" && currentUser.role === "COLLECTOR" && (
@@ -333,8 +368,9 @@ function CaseDetail() {
       </div>
 
       {/* Cost & payment summary */}
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
         <SummaryTile label="Взыскано" value={fmtUSD(totalPaid)} tone="success" icon={Coins} />
+        <SummaryTile label="Остаток к взысканию" value={fmtUSD(remaining)} tone={remaining > 0 ? "destructive" : "success"} icon={Coins} />
         <SummaryTile label="Расходы (cost-to-recover)" value={fmtUSD(totalCosts)} tone="money" icon={Wallet} />
         <SummaryTile label="Документов" value={String(docs.length)} tone="default" icon={FileText} />
         <SummaryTile label="Событий в аудите" value={String(events.length)} tone="default" icon={History} />
@@ -521,14 +557,83 @@ function CaseDetail() {
   );
 }
 
+const ACTION_LABEL: Record<string, string> = {
+  CREATED: "Дело создано",
+  ASSIGNED: "Назначено агентству",
+  REASSIGNED: "Переназначено",
+  STATUS_CHANGED: "Смена статуса",
+  CONTACT_LOGGED: "Контакт зафиксирован",
+  PROMISE_LOGGED: "Обещание оплаты зафиксировано",
+  PAYMENT_RECORDED: "Платёж записан",
+  DOCUMENT_GENERATED: "Документ сгенерирован",
+  COST_ADDED: "Добавлены расходы",
+  ROUTE_CHOSEN: "Выбран маршрут взыскания",
+  COURT_UPDATE: "Обновление по суду",
+  MIB_UPDATE: "Обновление по МИБ",
+  TRANSFER_INITIATED: "Инициирован перевод",
+  TRANSFER_APPROVED: "Перевод согласован",
+  WRITTEN_OFF: "Дело списано",
+  CLOSED: "Дело закрыто",
+  PORTFOLIO_UPLOADED: "Дело загружено в портфель",
+  ASSIGNED_USER: "Назначен исполнитель",
+  VISIT_STARTED: "Начат выездной визит",
+  VISIT_COMPLETED: "Выездной визит завершён",
+};
+
+// Компактная полоса «что сделали → что ожидается» — отвечает на вопрос
+// "на каком этапе дело" без похода в аудит-лог: воронка (LifecycleSpine)
+// даёт макро-стадию, эта полоса — последнее конкретное действие и следующий
+// ожидаемый шаг (дедлайн обещания или рекомендация Decision Engine).
+function ActionTrail({ c, events, slas, db }: { c: Case; events: CaseEvent[]; slas: SlaTimer[]; db: DB }) {
+  const last = events[0];
+  const lastActor = last ? db.users.find((u) => u.id === last.actorUserId) : undefined;
+  const lastLabel = last ? ACTION_LABEL[last.type] ?? last.type : null;
+
+  const openPromise = slas
+    .filter((s) => s.type === "PROMISE_DUE" && !s.breached)
+    .sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1))[0];
+
+  const reco = !openPromise ? caseReco(db, c) : null;
+
+  const expected = openPromise
+    ? `Обещанная оплата до ${fmtDate(openPromise.dueAt)}`
+    : reco
+      ? reco.label
+      : null;
+
+  if (!last && !expected) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+      {last ? (
+        <span>
+          Последнее действие: <b className="text-foreground">{lastLabel}</b>
+          {lastActor && <> · {lastActor.name}</>} · {fmtDateTime(last.createdAt)}
+        </span>
+      ) : (
+        <span>Действий по делу ещё не было</span>
+      )}
+      {expected && (
+        <>
+          <ArrowRight className="h-3 w-3 shrink-0" />
+          <span>
+            Ожидается: <b className="text-foreground">{expected}</b>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Empty({ label }: { label: string }) {
   return <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{label}</div>;
 }
 
 function SummaryTile({
   label, value, tone, icon: Icon,
-}: { label: string; value: string; tone: "success" | "money" | "default"; icon: typeof Coins }) {
-  const cls = tone === "success" ? "text-success" : tone === "money" ? "text-money" : "text-foreground";
+}: { label: string; value: string; tone: "success" | "money" | "default" | "destructive"; icon: typeof Coins }) {
+  const cls =
+    tone === "success" ? "text-success" : tone === "money" ? "text-money" : tone === "destructive" ? "text-destructive" : "text-foreground";
   return (
     <div className="rounded-md border border-border bg-surface p-3">
       <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase text-muted-foreground">

@@ -59,7 +59,13 @@ interface StoreCtx {
   assignCase: (caseId: string, toOrgId: string, toUserId?: string, reason?: string) => Promise<Result>;
   assignCaseUser: (caseId: string, userId: string | null) => Promise<Result>;
   takeCase: (caseId: string) => Promise<Result>;
-  logContact: (caseId: string, note: string, result: "CONTACTED" | "NO_CONTACT") => Promise<Result>;
+  logContact: (
+    caseId: string,
+    note: string,
+    result: "CONTACTED" | "NO_CONTACT",
+    channel?: "CALL" | "SMS" | "VISIT" | "EMAIL" | "OTHER",
+    nextContactAt?: string,
+  ) => Promise<Result>;
   logPromise: (caseId: string, promisedDate: string, amountUSD: number) => Promise<Result>;
   recordPayment: (caseId: string, amountUSD: number, kind: "FULL" | "PARTIAL") => Promise<Result>;
   generateDocument: (caseId: string, kind: DocumentKind, title: string) => Promise<Result>;
@@ -202,8 +208,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         call(apiAssign({ data: { caseId, toOrgId, reason } }), invalidate),
       assignCaseUser: (caseId, userId) => call(apiAssignUser({ data: { caseId, userId } }), invalidate),
       takeCase: (caseId) => call(apiTakeCase({ data: { caseId } }), invalidate),
-      logContact: (caseId, note, result) =>
-        call(apiLogContact({ data: { caseId, note, result } }), invalidate),
+      logContact: (caseId, note, result, channel, nextContactAt) =>
+        call(apiLogContact({ data: { caseId, note, result, channel, nextContactAt } }), invalidate),
       logPromise: (caseId, promisedDate, amountUSD) =>
         call(apiLogPromise({ data: { caseId, promisedDate, amountUSD } }), invalidate),
       recordPayment: (caseId, amountUSD, kind) =>

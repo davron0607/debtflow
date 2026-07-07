@@ -31,16 +31,21 @@ export function statusTone(s: CaseStatus): "success" | "destructive" | "neutral"
   return "neutral";
 }
 
-export function spineStage(s: CaseStatus): "pre" | "court" | "post" {
+export function spineStage(s: CaseStatus): "pre" | "court" | "post" | "resolved" {
   const pre: CaseStatus[] = [
     "NEW", "ASSIGNED", "SOFT_COLLECTION", "CONTACTED", "NO_CONTACT",
     "PROMISE_TO_PAY", "PROMISE_BROKEN", "PARTIALLY_PAID", "DISPUTE",
     "RESTRUCTURING_PROPOSED", "RESTRUCTURED", "ESCALATED_TO_LEGAL", "PRE_CLAIM_SENT",
   ];
   const court: CaseStatus[] = ["COURT_PACKAGE_READY", "FILED_TO_COURT", "COURT_DECISION_RECEIVED"];
+  // Оплата/закрытие/списание — исход, а не этап судебного процесса; может
+  // наступить на любой стадии, поэтому не должно визуально выглядеть как
+  // "После суда / МИБ" (иначе полное погашение до суда выглядит как эскалация).
+  const resolved: CaseStatus[] = ["PAID", "CLOSED", "WRITTEN_OFF"];
+  if (resolved.includes(s)) return "resolved";
   if (pre.includes(s)) return "pre";
   if (court.includes(s)) return "court";
-  return "post";
+  return "post"; // READY_FOR_MIB — реальная стадия после суда, ещё не закрыта
 }
 
 type Transition = { to: CaseStatus; roles: UserRole[]; label?: string; destructive?: boolean };
