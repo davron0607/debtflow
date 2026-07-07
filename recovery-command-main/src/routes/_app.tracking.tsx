@@ -78,6 +78,7 @@ function TrackingPage() {
               <thead className="bg-surface-2 uppercase text-muted-foreground">
                 <tr>
                   <th className="p-2 text-left">Коллектор</th>
+                  <th className="p-2 text-right">Дел в работе</th>
                   <th className="p-2 text-right">Выездов</th>
                   <th className="p-2 text-right">Контакт %</th>
                   <th className="p-2 text-right">Результат</th>
@@ -100,6 +101,9 @@ function TrackingPage() {
                         <div className="text-[10px] text-muted-foreground">
                           {db.orgs.find((o) => o.id === u?.orgId)?.name}
                         </div>
+                      </td>
+                      <td className="p-2 text-right font-mono">
+                        {db.cases.filter((x) => x.assignedUserId === cid && !["PAID", "CLOSED", "WRITTEN_OFF", "RESTRUCTURED"].includes(x.status)).length}
                       </td>
                       <td className="p-2 text-right font-mono">{mine.length}</td>
                       <td className={"p-2 text-right font-mono " + (contactRate >= 60 ? "text-success" : "text-destructive")}>

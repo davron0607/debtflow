@@ -128,6 +128,7 @@ export type CaseEventType =
   | "WRITTEN_OFF"
   | "CLOSED"
   | "PORTFOLIO_UPLOADED"
+  | "ASSIGNED_USER"
   | "VISIT_STARTED"
   | "VISIT_COMPLETED";
 

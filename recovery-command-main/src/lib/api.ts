@@ -610,6 +610,33 @@ export const apiAssign = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ——— Распределение по сотрудникам внутри организации-исполнителя ———
+export const apiAssignUser = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ caseId: z.string(), userId: z.string().nullable() }))
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (!["MANAGER", "BANK_ADMIN"].includes(u.role))
+      forbid("Исполнителя назначает менеджер организации (или админ банка для in-house)");
+    // Дело должно быть назначено организации текущего пользователя
+    const c = await prisma.case.findFirst({ where: { id: data.caseId, assignedOrgId: u.orgId } });
+    if (!c) forbid("Дело не назначено вашей организации");
+    let target: User | null = null;
+    if (data.userId) {
+      target = await prisma.user.findUnique({ where: { id: data.userId } });
+      if (!target || target.orgId !== u.orgId || !target.active)
+        forbid("Сотрудник не найден в вашей организации");
+      const workRoles = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"];
+      if (!workRoles.includes(target.role)) forbid("Исполнителем может быть коллектор или юрист");
+    }
+    await prisma.case.update({ where: { id: c.id }, data: { assignedUserId: data.userId } });
+    await audit(u.id, c.id, "ASSIGNED_USER", {
+      toUserId: data.userId,
+      toUserName: target?.name ?? null,
+      fromUserId: c.assignedUserId ?? null,
+    });
+    return { ok: true as const };
+  });
+
 // ——— Работа коллектора ———
 export const apiLogContact = createServerFn({ method: "POST" })
   .inputValidator(

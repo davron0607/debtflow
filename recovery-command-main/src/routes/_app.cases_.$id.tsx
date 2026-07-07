@@ -44,6 +44,7 @@ function CaseDetail() {
     logContact,
     logPromise,
     recordPayment,
+    assignCaseUser,
   } = useStore();
 
   const c = caseById(id);
@@ -131,11 +132,42 @@ function CaseDetail() {
         <div className="mt-5 flex flex-wrap items-center gap-4">
           <LifecycleSpine status={c.status} />
           <StatusBadge status={c.status} />
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             {org ? (
-              <>Назначено: <Building2 className="inline h-3 w-3" /> <b className="text-foreground">{org.name}</b></>
+              <span>Назначено: <Building2 className="inline h-3 w-3" /> <b className="text-foreground">{org.name}</b></span>
             ) : (
-              <>Не назначено</>
+              <span>Не назначено</span>
+            )}
+            {/* Исполнитель внутри организации: учёт и GPS привязаны к сотруднику */}
+            {org && (
+              ["MANAGER", "BANK_ADMIN"].includes(currentUser.role) && currentUser.orgId === org.id ? (
+                <label className="flex items-center gap-1.5">
+                  Исполнитель:
+                  <select
+                    value={c.assignedUserId ?? ""}
+                    onChange={(e) => assignCaseUser(c.id, e.target.value || null)}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground"
+                  >
+                    <option value="">— не распределено —</option>
+                    {db.users
+                      .filter(
+                        (x) =>
+                          x.orgId === org.id &&
+                          x.active !== false &&
+                          ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"].includes(x.role),
+                      )
+                      .map((x) => (
+                        <option key={x.id} value={x.id}>{x.name}</option>
+                      ))}
+                  </select>
+                </label>
+              ) : c.assignedUserId ? (
+                <span>
+                  Исполнитель: <b className="text-foreground">{db.users.find((x) => x.id === c.assignedUserId)?.name ?? "—"}</b>
+                </span>
+              ) : (
+                <span className="text-money">Исполнитель не распределён</span>
+              )
             )}
           </div>
         </div>

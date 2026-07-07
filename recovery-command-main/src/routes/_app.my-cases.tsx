@@ -18,7 +18,8 @@ function MyCases() {
   const { db, scopedCases, currentUser } = useStore();
   const cases = scopedCases();
   const isAccountant = currentUser.role === "ACCOUNTANT";
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | "ALL" | "ACC">(
+  const isCollectorRole = ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM"].includes(currentUser.role);
+  const [statusFilter, setStatusFilter] = useState<CaseStatus | "ALL" | "ACC" | "MINE">(
     isAccountant ? "ACC" : "ALL",
   );
 
@@ -40,6 +41,7 @@ function MyCases() {
   const filtered = useMemo(() => {
     let list = cases;
     if (statusFilter === "ACC") list = cases.filter((c) => ACCOUNTANT_STATUSES.includes(c.status));
+    else if (statusFilter === "MINE") list = cases.filter((c) => c.assignedUserId === currentUser.id);
     else if (statusFilter !== "ALL") list = cases.filter((c) => c.status === statusFilter);
     return [...list].sort((a, b) => {
       // 1) не взятые в работу — наверх; 2) проблемные; 3) DPD; 4) сумма
@@ -82,6 +84,11 @@ function MyCases() {
         <Chip active={statusFilter === "ALL"} onClick={() => setStatusFilter("ALL")}>
           Все · {cases.length}
         </Chip>
+        {isCollectorRole && (
+          <Chip active={statusFilter === "MINE"} onClick={() => setStatusFilter(statusFilter === "MINE" ? "ALL" : "MINE")}>
+            👤 Назначенные мне · {cases.filter((c) => c.assignedUserId === currentUser.id).length}
+          </Chip>
+        )}
         {isAccountant && (
           <Chip active={statusFilter === "ACC"} onClick={() => setStatusFilter("ACC")}>
             💰 К оплате/подтверждению · {cases.filter((c) => ACCOUNTANT_STATUSES.includes(c.status)).length}
@@ -117,6 +124,11 @@ function MyCases() {
                   {isNew && (
                     <span className="flex items-center gap-1 rounded-full bg-money/15 px-2 py-0.5 text-[10px] font-semibold text-money">
                       <BellRing className="h-3 w-3" /> НЕ ВЗЯТО В РАБОТУ
+                    </span>
+                  )}
+                  {c.assignedUserId && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted-foreground">
+                      👤 {db.users.find((x) => x.id === c.assignedUserId)?.name ?? "—"}
                     </span>
                   )}
                   {due && ["PROMISE_TO_PAY", "PARTIALLY_PAID"].includes(c.status) && (

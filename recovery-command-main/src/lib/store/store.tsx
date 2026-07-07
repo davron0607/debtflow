@@ -11,6 +11,7 @@ import {
   apiSnapshot,
   apiTransition,
   apiAssign,
+  apiAssignUser,
   apiLogContact,
   apiLogPromise,
   apiRecordPayment,
@@ -55,6 +56,7 @@ interface StoreCtx {
   // mutations
   transitionStatus: (caseId: string, to: CaseStatus, reason?: string) => Promise<Result>;
   assignCase: (caseId: string, toOrgId: string, toUserId?: string, reason?: string) => Promise<Result>;
+  assignCaseUser: (caseId: string, userId: string | null) => Promise<Result>;
   logContact: (caseId: string, note: string, result: "CONTACTED" | "NO_CONTACT") => Promise<Result>;
   logPromise: (caseId: string, promisedDate: string, amountUSD: number) => Promise<Result>;
   recordPayment: (caseId: string, amountUSD: number, kind: "FULL" | "PARTIAL") => Promise<Result>;
@@ -196,6 +198,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         call(apiTransition({ data: { caseId, to, reason } }), invalidate),
       assignCase: (caseId, toOrgId, _toUserId, reason) =>
         call(apiAssign({ data: { caseId, toOrgId, reason } }), invalidate),
+      assignCaseUser: (caseId, userId) => call(apiAssignUser({ data: { caseId, userId } }), invalidate),
       logContact: (caseId, note, result) =>
         call(apiLogContact({ data: { caseId, note, result } }), invalidate),
       logPromise: (caseId, promisedDate, amountUSD) =>
