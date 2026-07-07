@@ -30,13 +30,25 @@ GRANT USAGE ON SCHEMA public TO debtflow_admin_console;
 --    EmailVerificationToken), остаётся БЕЗ ДОСТУПА по умолчанию —
 --    ничего дополнительно отзывать не нужно.
 
--- Organization: читать всё, обновлять только статус (одобрение/приостановка)
+-- Organization: читать всё, обновлять статус (одобрение/приостановка/архивация)
+-- и тарифные поля (plan/maxUsers/maxCases) — квоты, не данные дел.
 GRANT SELECT ON "Organization" TO debtflow_admin_console;
-GRANT UPDATE ("status") ON "Organization" TO debtflow_admin_console;
+GRANT UPDATE ("status", "plan", "maxUsers", "maxCases") ON "Organization" TO debtflow_admin_console;
 
--- User: только чтение — для логина оператора и телеметрии (email/role/active);
--- ни создавать, ни менять пользователей банков/агентств консоль не может.
+-- User: чтение — для логина оператора и телеметрии (email/role/active).
+-- Точечные UPDATE — только для операций саппорта над учётками сотрудников
+-- банков/агентств: сброс пароля (passwordHash) и блокировка/разблокировка
+-- (active). Никакие другие поля (email, role, orgId и т.д.) не изменяемы.
 GRANT SELECT ON "User" TO debtflow_admin_console;
+GRANT UPDATE ("passwordHash", "active") ON "User" TO debtflow_admin_console;
+
+-- INSERT + точечный UPDATE(operatorLevel) — только чтобы консоль сама могла
+-- приглашать новых операторов платформы (role=PLATFORM_ADMIN, orgId=org_platform)
+-- и назначать им уровень доступа (FULL/READ_ONLY). Код приложения обязан сам
+-- гарантировать role='PLATFORM_ADMIN' и orgId='org_platform' при INSERT —
+-- на уровне БД это не проверяется (row-level ограничения роль не поддерживает).
+GRANT INSERT ON "User" TO debtflow_admin_console;
+GRANT UPDATE ("operatorLevel") ON "User" TO debtflow_admin_console;
 
 -- Session: чтение для телеметрии "последняя активность", запись собственной
 -- сессии оператора при входе, удаление — при приостановке организации
@@ -45,6 +57,12 @@ GRANT SELECT, INSERT, DELETE ON "Session" TO debtflow_admin_console;
 
 -- PlatformAuditEvent: собственный append-only журнал консоли.
 GRANT SELECT, INSERT ON "PlatformAuditEvent" TO debtflow_admin_console;
+
+-- Case: ТОЛЬКО не-конфиденциальные колонки, только для подсчёта использования
+-- квоты (сколько дел у организации) — суммы, должник, статус взыскания по
+-- существу, документы и платежи по-прежнему НЕДОСТУПНЫ (нет доступа к таблице
+-- целиком, только эти 4 колонки; невозможно прочитать amountUSD/debtorId и т.д.).
+GRANT SELECT ("id", "tenantBankId", "assignedOrgId", "status", "createdAt") ON "Case" TO debtflow_admin_console;
 
 -- RateLimit: общий rate-limit логина, отдельные ключи (admin-login-*).
 GRANT SELECT, INSERT, UPDATE ON "RateLimit" TO debtflow_admin_console;

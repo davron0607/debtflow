@@ -9,6 +9,7 @@ interface StoreCtx {
   isAuthenticated: boolean;
   name: string;
   email: string;
+  isReadOnly: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -28,6 +29,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     isAuthenticated: data?.authenticated === true,
     name: data?.authenticated ? data.name : "",
     email: data?.authenticated ? data.email : "",
+    isReadOnly: data?.authenticated ? data.isReadOnly : false,
     isLoading,
     login: async (email, password) => {
       const r = await apiLogin({ data: { email, password } });

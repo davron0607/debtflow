@@ -20,6 +20,7 @@ const SESSION_TTL_MS = 12 * 3600_000; // 12 часов — короче, чем 
 const BCRYPT_ROUNDS = 12;
 
 export const verifyPassword = (plain: string, hash: string) => bcrypt.compare(plain, hash);
+export const hashPassword = (plain: string) => bcrypt.hash(plain, BCRYPT_ROUNDS);
 
 // ——— CSRF: мутации принимаются только со своего origin ———
 export function assertSameOrigin(): void {
@@ -112,5 +113,9 @@ export async function requireUser(): Promise<User> {
 
 export async function requireUserMutation(): Promise<User> {
   assertSameOrigin();
-  return requireUser();
+  const u = await requireUser();
+  // READ_ONLY-операторы видят все страницы, но не могут проводить действия.
+  // null/undefined (старые учётки до появления уровней) трактуется как FULL.
+  if (u.operatorLevel === "READ_ONLY") throw new Error("FORBIDDEN: read-only operator");
+  return u;
 }

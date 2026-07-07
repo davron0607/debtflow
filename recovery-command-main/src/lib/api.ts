@@ -54,6 +54,7 @@ async function requireActiveOrg(u: User) {
     forbid("Организация на проверке оператором платформы — действие пока недоступно");
   if (org.status === "REJECTED") forbid("Заявка организации отклонена");
   if (org.status === "SUSPENDED") forbid("Организация приостановлена оператором платформы");
+  if (org.status === "ARCHIVED") forbid("Организация закрыта оператором платформы");
   return org;
 }
 
@@ -111,6 +112,10 @@ export const apiLogin = createServerFn({ method: "POST" })
       if (org?.status === "SUSPENDED") {
         logEvent("warn", "login_failed", { userId: user.id, reason: "org_suspended" });
         return { ok: false as const, error: "Доступ организации приостановлен оператором платформы" };
+      }
+      if (org?.status === "ARCHIVED") {
+        logEvent("warn", "login_failed", { userId: user.id, reason: "org_archived" });
+        return { ok: false as const, error: "Организация закрыта оператором платформы" };
       }
     }
     if (!(await verifyPassword(data.password, user.passwordHash))) {

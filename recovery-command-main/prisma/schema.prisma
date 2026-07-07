@@ -24,6 +24,7 @@ enum OrgStatus {
   ACTIVE
   REJECTED
   SUSPENDED
+  ARCHIVED // окончательно закрыта оператором платформы (не временная приостановка)
 }
 
 enum UserRole {
@@ -36,6 +37,13 @@ enum UserRole {
   LEGAL_FIRM
   MANAGER
   ACCOUNTANT
+}
+
+// Уровень доступа внутри команды операторов платформы (роль PLATFORM_ADMIN).
+// Не используется для ролей банков/агентств.
+enum OperatorLevel {
+  FULL      // может проводить действия: модерация, блокировки, сброс паролей
+  READ_ONLY // видит дашборд/организации/пользователей/журнал, без мутаций
 }
 
 enum CaseStatus {
@@ -115,6 +123,10 @@ model Organization {
   domain    String?  // официальный домен (антифрод-проверка для банков/МФО)
   createdAt DateTime @default(now())
 
+  plan      String   @default("STANDARD") // тарифный план, задаётся оператором платформы
+  maxUsers  Int?     // квота сотрудников (null = без ограничения)
+  maxCases  Int?     // квота одновременных дел (null = без ограничения)
+
   users         User[]
   assignedCases Case[]  @relation("AssignedOrg")
   tenantCases   Case[]  @relation("TenantBank")
@@ -128,6 +140,7 @@ model User {
   email          String   @unique
   passwordHash   String
   role           UserRole
+  operatorLevel   OperatorLevel? // используется только при role=PLATFORM_ADMIN
   edsOperational  String?  // съёмный операционный атрибут (ЭЦП)
   active          Boolean  @default(true)
   emailVerifiedAt DateTime? // null = e-mail не подтверждён, вход запрещён

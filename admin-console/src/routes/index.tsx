@@ -8,5 +8,5 @@ export const Route = createFileRoute("/")({
 function IndexRedirect() {
   const { isAuthenticated, isLoading } = useStore();
   if (isLoading) return null;
-  return <Navigate to={isAuthenticated ? "/orgs" : "/login"} />;
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} />;
 }

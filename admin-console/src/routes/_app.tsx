@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate, Outlet, Link, useRouterState } from "@tanstack/react-router";
-import { Building2, ScrollText, LogOut, ShieldCheck } from "lucide-react";
+import { Building2, ScrollText, LogOut, ShieldCheck, Users, LayoutDashboard, UserCog, Eye } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -9,12 +9,15 @@ export const Route = createFileRoute("/_app")({
 });
 
 const NAV = [
+  { to: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
   { to: "/orgs", label: "Организации", icon: Building2 },
+  { to: "/users", label: "Пользователи", icon: Users },
+  { to: "/operators", label: "Операторы", icon: UserCog },
   { to: "/audit", label: "Журнал действий", icon: ScrollText },
 ];
 
 function AppGuard() {
-  const { isAuthenticated, isLoading, name, email, logout } = useStore();
+  const { isAuthenticated, isLoading, name, email, isReadOnly, logout } = useStore();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
 
   if (isLoading) return null;
@@ -63,6 +66,11 @@ function AppGuard() {
             <span className="font-display text-sm font-bold">DebtFlow · Оператор</span>
           </div>
           <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+            {isReadOnly && (
+              <span className="flex items-center gap-1 rounded-full bg-money/10 px-2 py-1 text-money">
+                <Eye className="h-3 w-3" /> Только просмотр
+              </span>
+            )}
             <span>{name} · {email}</span>
             <button
               onClick={logout}
