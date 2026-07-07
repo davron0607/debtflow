@@ -23,6 +23,7 @@ enum OrgStatus {
   PENDING
   ACTIVE
   REJECTED
+  SUSPENDED
 }
 
 enum UserRole {
@@ -160,6 +161,22 @@ model RateLimit {
   key         String   @id // напр. "login:1.2.3.4" или "login:email@x"
   count       Int      @default(1)
   windowStart DateTime @default(now())
+}
+
+// Append-only журнал действий оператора платформы. Отдельно от CaseEvent:
+// PLATFORM_ADMIN не имеет доступа к делам банков/агентств, поэтому его
+// действия (модерация, приостановка организаций) логируются отдельно.
+model PlatformAuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String
+  targetOrgId String?
+  type        String
+  payload     Json     @default("{}")
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetOrgId])
 }
 
 // Подтверждение e-mail при регистрации: храним только SHA-256 хэш токена

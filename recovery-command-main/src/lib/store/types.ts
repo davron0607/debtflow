@@ -1,5 +1,5 @@
 export type OrgType = "BANK" | "MFO" | "COLLECTOR" | "LEGAL_FIRM" | "PLATFORM";
-export type OrgStatus = "PENDING" | "ACTIVE" | "REJECTED";
+export type OrgStatus = "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED";
 
 export type UserRole =
   | "PLATFORM_ADMIN"
