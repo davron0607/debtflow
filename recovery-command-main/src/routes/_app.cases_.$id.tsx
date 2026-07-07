@@ -22,6 +22,7 @@ import { LifecycleSpine } from "@/components/lifecycle-spine";
 import { DecisionPanel } from "@/components/decision-panel";
 import { PaymentChart } from "@/components/payment-chart";
 import { caseReco } from "@/lib/decision-engine";
+import { VISIT_RESULT_LABEL } from "@/lib/store/types";
 import type { Case, CaseEvent, CaseStatus, DB, DocumentKind, SlaTimer } from "@/lib/store/types";
 
 export const Route = createFileRoute("/_app/cases_/$id")({
@@ -502,15 +503,19 @@ function CaseDetail() {
             <div className="space-y-1">
               {events.map((e) => {
                 const u = db.users.find((x) => x.id === e.actorUserId);
+                const detail = formatEventPayload(e, db);
                 return (
                   <div key={e.id} className="flex items-start gap-3 rounded-md border border-border bg-surface-2 p-2 text-xs">
                     <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
-                        <b className="font-mono text-primary">{e.type}</b>
+                        <b className="text-foreground">{ACTION_LABEL[e.type] ?? e.type}</b>
                         <span className="text-muted-foreground">{fmtDateTime(e.createdAt)}</span>
                       </div>
-                      <div className="text-muted-foreground">{u?.name ?? "—"} · {JSON.stringify(e.payload)}</div>
+                      <div className="text-muted-foreground">
+                        {u?.name ?? "—"}
+                        {detail && <> · {detail}</>}
+                      </div>
                       {e.reason && <div className="mt-0.5 text-destructive">Причина: {e.reason}</div>}
                     </div>
                   </div>
@@ -579,6 +584,64 @@ const ACTION_LABEL: Record<string, string> = {
   VISIT_STARTED: "Начат выездной визит",
   VISIT_COMPLETED: "Выездной визит завершён",
 };
+
+const CHANNEL_LABEL: Record<string, string> = {
+  CALL: "звонок", SMS: "SMS", VISIT: "визит", EMAIL: "e-mail", OTHER: "другое",
+};
+const CONTACT_RESULT_LABEL: Record<string, string> = { CONTACTED: "контакт установлен", NO_CONTACT: "нет контакта" };
+const PAYMENT_KIND_LABEL: Record<string, string> = { FULL: "полностью", PARTIAL: "частично" };
+
+// Превращает сырой JSON payload события в человекочитаемую строку — раньше
+// в аудит-логе показывался голый JSON, из которого не была видна суть события.
+function formatEventPayload(e: CaseEvent, db: DB): string {
+  const p = e.payload as Record<string, unknown>;
+  const orgName = (id: unknown) => db.orgs.find((o) => o.id === id)?.name ?? String(id ?? "—");
+
+  switch (e.type) {
+    case "STATUS_CHANGED":
+      return `${STATUS_LABEL[p.from as CaseStatus] ?? p.from} → ${STATUS_LABEL[p.to as CaseStatus] ?? p.to}`;
+    case "PAYMENT_RECORDED":
+      return `${fmtUSD(Number(p.amountUSD))} (${PAYMENT_KIND_LABEL[p.kind as string] ?? p.kind})`;
+    case "PROMISE_LOGGED":
+      return `${fmtUSD(Number(p.amountUSD))} до ${fmtDate(String(p.promisedDate))}`;
+    case "CONTACT_LOGGED": {
+      const parts = [CONTACT_RESULT_LABEL[p.result as string] ?? p.result];
+      if (p.channel) parts.push(CHANNEL_LABEL[p.channel as string] ?? String(p.channel));
+      if (p.note) parts.push(`«${p.note}»`);
+      if (p.nextContactAt) parts.push(`след. контакт ${fmtDate(String(p.nextContactAt))}`);
+      return parts.filter(Boolean).join(" · ");
+    }
+    case "ASSIGNED":
+    case "REASSIGNED":
+      return p.fromOrgId ? `${orgName(p.fromOrgId)} → ${orgName(p.toOrgId)}` : orgName(p.toOrgId);
+    case "ASSIGNED_USER":
+      return p.toUserName ? `${p.toUserName}${p.selfTake ? " (взял сам)" : ""}` : "снято назначение";
+    case "DOCUMENT_GENERATED":
+      return String(p.title ?? p.kind ?? "");
+    case "COST_ADDED":
+      return `${fmtUSD(Number(p.amountUSD))}${p.kind ? ` · ${p.kind}` : ""}${p.note ? ` · ${p.note}` : ""}`;
+    case "ROUTE_CHOSEN":
+      return String(p.route ?? "");
+    case "TRANSFER_INITIATED":
+      return fmtUSD(Number(p.amountUSD));
+    case "TRANSFER_APPROVED":
+      return `согласовал: ${p.role}`;
+    case "PORTFOLIO_UPLOADED":
+      return `${p.code} · ${fmtUSD(Number(p.amountUSD))} · DPD ${p.dpd}`;
+    case "VISIT_STARTED":
+      return `${p.lat}, ${p.lng}`;
+    case "VISIT_COMPLETED":
+      return [VISIT_RESULT_LABEL[p.result as keyof typeof VISIT_RESULT_LABEL] ?? p.result, p.note].filter(Boolean).join(" · ");
+    case "WRITTEN_OFF":
+    case "CREATED":
+    case "CLOSED":
+      return "";
+    default:
+      return Object.entries(p)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(" · ");
+  }
+}
 
 // Компактная полоса «что сделали → что ожидается» — отвечает на вопрос
 // "на каком этапе дело" без похода в аудит-лог: воронка (LifecycleSpine)
