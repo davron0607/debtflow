@@ -14,7 +14,6 @@
     "start": "prisma migrate deploy && node .output/server/index.mjs",
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:ensure-ops": "tsx prisma/ensure-ops.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

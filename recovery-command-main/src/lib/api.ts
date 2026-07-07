@@ -57,19 +57,6 @@ async function requireActiveOrg(u: User) {
   return org;
 }
 
-async function platformAudit(
-  actorUserId: string,
-  type: string,
-  targetOrgId?: string,
-  payload: Record<string, unknown> = {},
-  reason?: string,
-) {
-  await prisma.platformAuditEvent.create({
-    data: { actorUserId, targetOrgId, type, payload: payload as Prisma.InputJsonObject, reason },
-  });
-  logEvent("info", "platform_action", { type, actorUserId, targetOrgId, reason });
-}
-
 async function requireCaseInScope(u: User, caseId: string) {
   const c = await prisma.case.findFirst({ where: { id: caseId, ...caseScope(u) } });
   if (!c) forbid("Дело не найдено или недоступно");
@@ -112,7 +99,14 @@ export const apiLogin = createServerFn({ method: "POST" })
       logEvent("warn", "login_failed", { userId: user.id, reason: "inactive" });
       return { ok: false as const, error: "Доступ отключён администратором" };
     }
-    if (user.role !== "PLATFORM_ADMIN") {
+    // Оператор платформы работает через отдельное приложение (консоль
+    // оператора, отдельный домен/сервис) — сюда его учётка не пускается,
+    // даже если бы пароль подошёл. Разделение по origin — часть модели угроз.
+    if (user.role === "PLATFORM_ADMIN") {
+      logEvent("warn", "login_failed", { userId: user.id, reason: "platform_admin_wrong_app" });
+      return fail;
+    }
+    {
       const org = await prisma.organization.findUnique({ where: { id: user.orgId } });
       if (org?.status === "SUSPENDED") {
         logEvent("warn", "login_failed", { userId: user.id, reason: "org_suspended" });
@@ -271,212 +265,6 @@ export const apiVerifyEmail = createServerFn({ method: "POST" })
     logEvent("info", "email_verified", { userId });
     return { ok: true as const };
   });
-
-// ——— Модерация организаций (оператор платформы) ———
-export const apiModerationList = createServerFn({ method: "GET" }).handler(async () => {
-  const u = await requireUser();
-  if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
-  const orgs = await prisma.organization.findMany({
-    where: { status: { in: ["PENDING", "REJECTED"] } },
-    include: {
-      users: {
-        select: { name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true },
-        take: 1,
-        orderBy: { createdAt: "asc" },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  return orgs.map((o) => ({
-    id: o.id,
-    name: o.name,
-    type: o.type,
-    status: o.status,
-    domain: o.domain,
-    createdAt: o.createdAt.toISOString(),
-    admin: o.users[0]
-      ? {
-          name: o.users[0].name,
-          email: o.users[0].email,
-          emailVerified: !!o.users[0].emailVerifiedAt,
-        }
-      : null,
-  }));
-});
-
-export const apiModerateOrg = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      orgId: z.string(),
-      decision: z.enum(["APPROVE", "REJECT"]),
-      reason: z.string().max(1000).optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const u = await requireUserMutation();
-    if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
-    const org = await prisma.organization.findUnique({
-      where: { id: data.orgId },
-      include: { users: { orderBy: { createdAt: "asc" }, take: 1 } },
-    });
-    if (!org) return { ok: false as const, error: "Организация не найдена" };
-    if (data.decision === "REJECT" && !data.reason?.trim())
-      return { ok: false as const, error: "Для отклонения обязательна причина" };
-    const status = data.decision === "APPROVE" ? "ACTIVE" : "REJECTED";
-    await prisma.organization.update({ where: { id: org.id }, data: { status } });
-    await platformAudit(u.id, "ORG_MODERATED", org.id, { decision: data.decision, orgName: org.name }, data.reason);
-    const admin = org.users[0];
-    if (admin) {
-      await sendMail({
-        to: admin.email,
-        subject:
-          data.decision === "APPROVE"
-            ? "DebtFlow: организация одобрена"
-            : "DebtFlow: заявка отклонена",
-        html:
-          data.decision === "APPROVE"
-            ? `<div style="font-family:Arial,sans-serif;max-width:520px">
-                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
-                 <p>Здравствуйте, ${admin.name}!</p>
-                 <p>Организация <b>${org.name}</b> прошла проверку. Полный доступ открыт:
-                    загрузка портфеля, назначения, работа с делами.</p>
-               </div>`
-            : `<div style="font-family:Arial,sans-serif;max-width:520px">
-                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
-                 <p>Здравствуйте, ${admin.name}!</p>
-                 <p>К сожалению, заявка организации <b>${org.name}</b> отклонена.</p>
-                 <p>Причина: ${data.reason}</p>
-               </div>`,
-      });
-    }
-    return { ok: true as const };
-  });
-
-// Полный список организаций с базовой телеметрией — оператор видит метаданные,
-// но не дела и не содержимое; это осознанная граница нейтралитета платформы.
-export const apiPlatformOrgList = createServerFn({ method: "GET" }).handler(async () => {
-  const u = await requireUser();
-  if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
-  const orgs = await prisma.organization.findMany({
-    where: { type: { not: "PLATFORM" } },
-    orderBy: { createdAt: "desc" },
-  });
-  const results = await Promise.all(
-    orgs.map(async (o) => {
-      const [userCount, activeUserCount, lastSession, caseCount, admin] = await Promise.all([
-        prisma.user.count({ where: { orgId: o.id } }),
-        prisma.user.count({ where: { orgId: o.id, active: true } }),
-        prisma.session.findFirst({
-          where: { user: { orgId: o.id } },
-          orderBy: { createdAt: "desc" },
-          select: { createdAt: true },
-        }),
-        prisma.case.count({ where: { OR: [{ tenantBankId: o.id }, { assignedOrgId: o.id }] } }),
-        prisma.user.findFirst({
-          where: { orgId: o.id },
-          orderBy: { createdAt: "asc" },
-          select: { name: true, email: true },
-        }),
-      ]);
-      return {
-        id: o.id,
-        name: o.name,
-        type: o.type,
-        status: o.status,
-        domain: o.domain,
-        createdAt: o.createdAt.toISOString(),
-        userCount,
-        activeUserCount,
-        caseCount,
-        lastActivityAt: lastSession?.createdAt.toISOString() ?? null,
-        admin,
-      };
-    }),
-  );
-  return results;
-});
-
-export const apiSetOrgSuspension = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      orgId: z.string(),
-      action: z.enum(["SUSPEND", "REACTIVATE"]),
-      reason: z.string().max(1000).optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const u = await requireUserMutation();
-    if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
-    const org = await prisma.organization.findUnique({ where: { id: data.orgId } });
-    if (!org) return { ok: false as const, error: "Организация не найдена" };
-    if (data.action === "SUSPEND" && !data.reason?.trim())
-      return { ok: false as const, error: "Для приостановки обязательна причина (уйдёт в аудит и письмом)" };
-    if (data.action === "SUSPEND" && org.status !== "ACTIVE")
-      return { ok: false as const, error: "Приостановить можно только активную организацию" };
-    if (data.action === "REACTIVATE" && org.status !== "SUSPENDED")
-      return { ok: false as const, error: "Организация не приостановлена" };
-
-    const newStatus = data.action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
-    await prisma.organization.update({ where: { id: org.id }, data: { status: newStatus } });
-
-    if (data.action === "SUSPEND") {
-      // Немедленно завершить все активные сессии сотрудников организации
-      await prisma.session.deleteMany({ where: { user: { orgId: org.id } } });
-    }
-
-    await platformAudit(
-      u.id,
-      data.action === "SUSPEND" ? "ORG_SUSPENDED" : "ORG_REACTIVATED",
-      org.id,
-      { orgName: org.name },
-      data.reason,
-    );
-
-    const admin = await prisma.user.findFirst({ where: { orgId: org.id }, orderBy: { createdAt: "asc" } });
-    if (admin) {
-      await sendMail({
-        to: admin.email,
-        subject:
-          data.action === "SUSPEND" ? "DebtFlow: доступ организации приостановлен" : "DebtFlow: доступ восстановлен",
-        html:
-          data.action === "SUSPEND"
-            ? `<div style="font-family:Arial,sans-serif;max-width:520px">
-                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
-                 <p>Здравствуйте, ${admin.name}!</p>
-                 <p>Доступ организации <b>${org.name}</b> к платформе временно приостановлен оператором.</p>
-                 <p>Причина: ${data.reason}</p>
-               </div>`
-            : `<div style="font-family:Arial,sans-serif;max-width:520px">
-                 <h2 style="color:#1B3A5C">Debt<span style="color:#3E8E41">Flow</span></h2>
-                 <p>Здравствуйте, ${admin.name}!</p>
-                 <p>Доступ организации <b>${org.name}</b> восстановлен, можно продолжать работу.</p>
-               </div>`,
-      });
-    }
-    return { ok: true as const };
-  });
-
-// Журнал действий оператора платформы (append-only, отдельный от аудита дел)
-export const apiPlatformAuditLog = createServerFn({ method: "GET" }).handler(async () => {
-  const u = await requireUser();
-  if (u.role !== "PLATFORM_ADMIN") forbid("Только оператор платформы");
-  const events = await prisma.platformAuditEvent.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 300,
-  });
-  const orgIds = [...new Set(events.map((e) => e.targetOrgId).filter((x): x is string => !!x))];
-  const orgs = await prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, name: true } });
-  const orgById = new Map(orgs.map((o) => [o.id, o.name]));
-  return events.map((e) => ({
-    id: e.id,
-    type: e.type,
-    targetOrgId: e.targetOrgId,
-    targetOrgName: e.targetOrgId ? orgById.get(e.targetOrgId) ?? null : null,
-    payload: e.payload,
-    reason: e.reason,
-    createdAt: e.createdAt.toISOString(),
-  }));
-});
 
 // ——— Сброс пароля (Resend) ———
 export const apiRequestPasswordReset = createServerFn({ method: "POST" })

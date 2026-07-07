@@ -1,30 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ShieldCheck,
-  Check,
-  X,
-  Globe,
-  MailCheck,
-  MailX,
-  Users,
-  Ban,
-  RotateCcw,
-  ScrollText,
-  Building2,
-} from "lucide-react";
-import { useStore } from "@/lib/store/store";
-import {
-  apiModerationList,
-  apiModerateOrg,
-  apiPlatformOrgList,
-  apiSetOrgSuspension,
-  apiPlatformAuditLog,
-} from "@/lib/api";
+import { Check, X, Globe, MailCheck, MailX, Ban, RotateCcw, Building2, Users } from "lucide-react";
+import { apiModerationList, apiModerateOrg, apiOrgList, apiSetOrgSuspension } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 
-export const Route = createFileRoute("/_app/moderation")({
-  component: ModerationPage,
+export const Route = createFileRoute("/_app/orgs")({
+  component: OrgsPage,
 });
 
 type PendingOrg = {
@@ -46,19 +27,8 @@ type OrgRow = {
   createdAt: string;
   userCount: number;
   activeUserCount: number;
-  caseCount: number;
   lastActivityAt: string | null;
   admin: { name: string; email: string } | null;
-};
-
-type AuditRow = {
-  id: string;
-  type: string;
-  targetOrgId: string | null;
-  targetOrgName: string | null;
-  payload: unknown;
-  reason: string | null;
-  createdAt: string;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -68,53 +38,24 @@ const TYPE_LABEL: Record<string, string> = {
   LEGAL_FIRM: "Юридическая фирма",
 };
 
-const AUDIT_TYPE_LABEL: Record<string, string> = {
-  ORG_MODERATED: "Решение по заявке",
-  ORG_SUSPENDED: "Организация приостановлена",
-  ORG_REACTIVATED: "Доступ восстановлен",
-};
+type TabKey = "pending" | "all";
 
-type TabKey = "pending" | "all" | "audit";
-
-function ModerationPage() {
-  const { currentUser } = useStore();
+function OrgsPage() {
   const [tab, setTab] = useState<TabKey>("pending");
-  const [orgs, setOrgs] = useState<PendingOrg[] | null>(null);
+  const [pendingOrgs, setPendingOrgs] = useState<PendingOrg[] | null>(null);
   const [allOrgs, setAllOrgs] = useState<OrgRow[] | null>(null);
-  const [auditLog, setAuditLog] = useState<AuditRow[] | null>(null);
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [suspendFor, setSuspendFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
-  const reloadPending = useCallback(async () => {
-    const list = await apiModerationList();
-    setOrgs(list as PendingOrg[]);
-  }, []);
-  const reloadAll = useCallback(async () => {
-    const list = await apiPlatformOrgList();
-    setAllOrgs(list as OrgRow[]);
-  }, []);
-  const reloadAudit = useCallback(async () => {
-    const list = await apiPlatformAuditLog();
-    setAuditLog(list as AuditRow[]);
-  }, []);
+  const reloadPending = useCallback(async () => setPendingOrgs((await apiModerationList()) as PendingOrg[]), []);
+  const reloadAll = useCallback(async () => setAllOrgs((await apiOrgList()) as OrgRow[]), []);
 
   useEffect(() => {
-    if (currentUser.role !== "PLATFORM_ADMIN") return;
     if (tab === "pending") void reloadPending();
-    if (tab === "all") void reloadAll();
-    if (tab === "audit") void reloadAudit();
-  }, [currentUser.role, tab, reloadPending, reloadAll, reloadAudit]);
-
-  if (currentUser.role !== "PLATFORM_ADMIN") {
-    return (
-      <div className="p-6 lg:p-8">
-        <h1 className="font-display text-3xl font-bold">Консоль оператора платформы</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Доступно только оператору платформы.</p>
-      </div>
-    );
-  }
+    else void reloadAll();
+  }, [tab, reloadPending, reloadAll]);
 
   const flash = (text: string) => {
     setNotice(text);
@@ -147,35 +88,26 @@ function ModerationPage() {
     }
   };
 
-  const pending = (orgs ?? []).filter((o) => o.status === "PENDING");
-  const rejected = (orgs ?? []).filter((o) => o.status === "REJECTED");
+  const pending = (pendingOrgs ?? []).filter((o) => o.status === "PENDING");
+  const rejected = (pendingOrgs ?? []).filter((o) => o.status === "REJECTED");
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-6 flex items-center gap-3">
-        <ShieldCheck className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="font-display text-3xl font-bold">Консоль оператора платформы</h1>
-          <p className="text-sm text-muted-foreground">
-            Модерация заявок, управление доступом организаций и журнал действий оператора.
-            Дела и внутренние данные банков/агентств оператору не видны — это граница нейтралитета платформы.
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-bold">Организации</h1>
+        <p className="text-sm text-muted-foreground">
+          Модерация заявок и управление доступом. Дела, документы и переписка банков/агентств оператору не видны.
+        </p>
       </div>
 
-      {notice && (
-        <div className="mb-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">{notice}</div>
-      )}
+      {notice && <div className="mb-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">{notice}</div>}
 
       <div className="mb-5 flex gap-1.5 border-b border-border">
         <TabButton active={tab === "pending"} onClick={() => setTab("pending")} icon={Building2}>
-          На проверке {orgs && `· ${pending.length}`}
+          На проверке {pendingOrgs && `· ${pending.length}`}
         </TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")} icon={Users}>
           Все организации
-        </TabButton>
-        <TabButton active={tab === "audit"} onClick={() => setTab("audit")} icon={ScrollText}>
-          Журнал действий
         </TabButton>
       </div>
 
@@ -188,9 +120,7 @@ function ModerationPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-display text-lg font-semibold">{o.name}</span>
-                      <span className="rounded-full bg-money/10 px-2 py-0.5 text-xs text-money">
-                        {TYPE_LABEL[o.type] ?? o.type}
-                      </span>
+                      <span className="rounded-full bg-money/10 px-2 py-0.5 text-xs text-money">{TYPE_LABEL[o.type] ?? o.type}</span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       {o.domain && (
@@ -204,11 +134,7 @@ function ModerationPage() {
                       )}
                       {o.admin && (
                         <span className="flex items-center gap-1">
-                          {o.admin.emailVerified ? (
-                            <MailCheck className="h-3 w-3 text-success" />
-                          ) : (
-                            <MailX className="h-3 w-3 text-destructive" />
-                          )}
+                          {o.admin.emailVerified ? <MailCheck className="h-3 w-3 text-success" /> : <MailX className="h-3 w-3 text-destructive" />}
                           {o.admin.name} · <span className="font-mono">{o.admin.email}</span>
                           {!o.admin.emailVerified && <span className="text-destructive">(e-mail не подтверждён)</span>}
                         </span>
@@ -250,7 +176,7 @@ function ModerationPage() {
                 )}
               </div>
             ))}
-            {orgs !== null && pending.length === 0 && (
+            {pendingOrgs !== null && pending.length === 0 && (
               <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                 Заявок на проверке нет.
               </div>
@@ -268,10 +194,7 @@ function ModerationPage() {
                     <span>
                       {o.name} <span className="text-xs text-muted-foreground">· {TYPE_LABEL[o.type] ?? o.type} · {o.domain}</span>
                     </span>
-                    <button
-                      onClick={() => decide(o.id, "APPROVE")}
-                      className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent"
-                    >
+                    <button onClick={() => decide(o.id, "APPROVE")} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent">
                       Одобрить всё же
                     </button>
                   </div>
@@ -291,7 +214,6 @@ function ModerationPage() {
                 <th className="p-3 text-left">Тип</th>
                 <th className="p-3 text-left">Статус</th>
                 <th className="p-3 text-right">Пользователей</th>
-                <th className="p-3 text-right">Дел</th>
                 <th className="p-3 text-left">Последняя активность</th>
                 <th className="p-3 text-right">Действия</th>
               </tr>
@@ -310,10 +232,7 @@ function ModerationPage() {
                   <td className="p-3 text-right font-mono text-xs">
                     {o.activeUserCount}/{o.userCount}
                   </td>
-                  <td className="p-3 text-right font-mono text-xs">{o.caseCount}</td>
-                  <td className="p-3 text-xs text-muted-foreground">
-                    {o.lastActivityAt ? fmtDateTime(o.lastActivityAt) : "—"}
-                  </td>
+                  <td className="p-3 text-xs text-muted-foreground">{o.lastActivityAt ? fmtDateTime(o.lastActivityAt) : "—"}</td>
                   <td className="p-3 text-right">
                     {o.status === "ACTIVE" && (
                       <button
@@ -353,54 +272,14 @@ function ModerationPage() {
               ))}
             </tbody>
           </table>
-          {allOrgs !== null && allOrgs.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">Организаций пока нет.</div>
-          )}
-        </div>
-      )}
-
-      {tab === "audit" && (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="p-3 text-left">Когда</th>
-                <th className="p-3 text-left">Действие</th>
-                <th className="p-3 text-left">Организация</th>
-                <th className="p-3 text-left">Причина</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(auditLog ?? []).map((e) => (
-                <tr key={e.id} className="border-t border-border/50 hover:bg-surface-2">
-                  <td className="whitespace-nowrap p-3 font-mono text-xs text-muted-foreground">{fmtDateTime(e.createdAt)}</td>
-                  <td className="p-3 text-xs font-medium">{AUDIT_TYPE_LABEL[e.type] ?? e.type}</td>
-                  <td className="p-3 text-xs">{e.targetOrgName ?? "—"}</td>
-                  <td className="p-3 text-xs text-muted-foreground">{e.reason ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {auditLog !== null && auditLog.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">Действий пока не было.</div>
-          )}
+          {allOrgs !== null && allOrgs.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">Организаций пока нет.</div>}
         </div>
       )}
     </div>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  icon: Icon,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Building2;
-  children: React.ReactNode;
-}) {
+function TabButton({ active, onClick, icon: Icon, children }: { active: boolean; onClick: () => void; icon: typeof Building2; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
@@ -416,14 +295,7 @@ function TabButton({
 
 function StatusChip({ status }: { status: string }) {
   const cls =
-    status === "ACTIVE"
-      ? "bg-success/10 text-success"
-      : status === "SUSPENDED"
-      ? "bg-destructive/10 text-destructive"
-      : status === "PENDING"
-      ? "bg-money/10 text-money"
-      : "bg-surface-2 text-muted-foreground";
-  const label =
-    status === "ACTIVE" ? "активна" : status === "SUSPENDED" ? "приостановлена" : status === "PENDING" ? "на проверке" : "отклонена";
+    status === "ACTIVE" ? "bg-success/10 text-success" : status === "SUSPENDED" ? "bg-destructive/10 text-destructive" : status === "PENDING" ? "bg-money/10 text-money" : "bg-surface-2 text-muted-foreground";
+  const label = status === "ACTIVE" ? "активна" : status === "SUSPENDED" ? "приостановлена" : status === "PENDING" ? "на проверке" : "отклонена";
   return <span className={`rounded-full px-2 py-0.5 text-xs ${cls}`}>{label}</span>;
 }

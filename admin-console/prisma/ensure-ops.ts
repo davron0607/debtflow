@@ -1,6 +1,10 @@
-// Идемпотентный бутстрап оператора платформы для уже засеянной БД (Railway).
-// Запуск: npm run db:ensure-ops
-// Пароль: env PLATFORM_ADMIN_PASSWORD (иначе demo123 — сменить через сброс пароля!)
+// Идемпотентный бутстрап оператора платформы. Создаёт Organization(PLATFORM)
+// и первого User(PLATFORM_ADMIN) — INSERT, которого у ограниченного
+// runtime-пользователя консоли (см. scripts/create-admin-console-role.sql)
+// НЕТ. Поэтому запускать с ПОЛНЫМИ правами на БД (владелец/DATABASE_URL
+// основного приложения), а не с рестрикшн-строкой из Railway-переменных
+// admin-console. Пример: DATABASE_URL=<owner-url> npm run db:ensure-ops
+// Пароль: env PLATFORM_ADMIN_PASSWORD (иначе demo123 — сменить через смену пароля вручную в БД!)
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 

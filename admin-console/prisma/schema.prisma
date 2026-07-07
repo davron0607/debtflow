@@ -1,0 +1,365 @@
+// DebtFlow — производственная схема данных (PostgreSQL).
+// Принципы: Case — центральный агрегат; CaseEvent — append-only аудит;
+// институциональная идентичность (дела принадлежат организации).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgType {
+  BANK
+  MFO
+  COLLECTOR
+  LEGAL_FIRM
+  PLATFORM
+}
+
+enum OrgStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  BANK_ADMIN
+  BANK_LEGAL
+  COLLECTOR
+  SOFT_COLLECTOR
+  HARD_COLLECTOR
+  LEGAL_FIRM
+  MANAGER
+  ACCOUNTANT
+}
+
+enum CaseStatus {
+  NEW
+  ASSIGNED
+  SOFT_COLLECTION
+  CONTACTED
+  NO_CONTACT
+  PROMISE_TO_PAY
+  PROMISE_BROKEN
+  PARTIALLY_PAID
+  PAID
+  DISPUTE
+  RESTRUCTURING_PROPOSED
+  RESTRUCTURED
+  ESCALATED_TO_LEGAL
+  PRE_CLAIM_SENT
+  COURT_PACKAGE_READY
+  FILED_TO_COURT
+  COURT_DECISION_RECEIVED
+  READY_FOR_MIB
+  CLOSED
+  WRITTEN_OFF
+}
+
+enum EnforcementRoute {
+  NONE
+  NOTARY
+  COURT
+}
+
+enum CaseType {
+  SECURED
+  UNSECURED
+}
+
+enum DocumentKind {
+  PRE_CLAIM
+  COURT_PACKAGE
+  CALC
+  MIB_SUBMISSION
+  NOTARY_INSCRIPTION
+}
+
+enum PaymentKind {
+  FULL
+  PARTIAL
+  PROMISE
+}
+
+enum CostKind {
+  STORAGE
+  EXPERTISE
+  LEGAL
+  OTHER
+}
+
+enum TransferStatus {
+  INITIATED
+  MANAGER_APPROVED
+  COMPLETED
+}
+
+enum VisitResult {
+  CONTACTED
+  NO_CONTACT
+  PROMISE
+  PAYMENT
+  REFUSED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      OrgType
+  status    OrgStatus @default(ACTIVE) // банки/МФО создаются в PENDING до одобрения оператором
+  domain    String?  // официальный домен (антифрод-проверка для банков/МФО)
+  createdAt DateTime @default(now())
+
+  users         User[]
+  assignedCases Case[]  @relation("AssignedOrg")
+  tenantCases   Case[]  @relation("TenantBank")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           UserRole
+  edsOperational  String?  // съёмный операционный атрибут (ЭЦП)
+  active          Boolean  @default(true)
+  emailVerifiedAt DateTime? // null = e-mail не подтверждён, вход запрещён
+  createdAt       DateTime @default(now())
+
+  sessions    Session[]
+  events      CaseEvent[]
+  visits      FieldVisit[]
+  resetTokens        PasswordResetToken[]
+  verificationTokens EmailVerificationToken[] @relation("EmailVerification")
+
+  @@index([orgId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// DB-backed rate limiting — общий для всех инстансов (Railway autoscale)
+model RateLimit {
+  key         String   @id // напр. "login:1.2.3.4" или "login:email@x"
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+}
+
+// Append-only журнал действий оператора платформы. Отдельно от CaseEvent:
+// PLATFORM_ADMIN не имеет доступа к делам банков/агентств, поэтому его
+// действия (модерация, приостановка организаций) логируются отдельно.
+model PlatformAuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String
+  targetOrgId String?
+  type        String
+  payload     Json     @default("{}")
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetOrgId])
+}
+
+// Подтверждение e-mail при регистрации: храним только SHA-256 хэш токена
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("EmailVerification", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Сброс пароля: храним только SHA-256 хэш токена
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Debtor {
+  id                 String  @id @default(cuid())
+  pinfl              String  @unique
+  name               String
+  phone              String
+  address            String
+  assetProfile       String?
+  accountBalancesUSD Int?
+
+  cases Case[]
+}
+
+model Case {
+  id                   String           @id @default(cuid())
+  code                 String           @unique
+  tenantBankId         String
+  tenantBank           Organization     @relation("TenantBank", fields: [tenantBankId], references: [id])
+  debtorId             String
+  debtor               Debtor           @relation(fields: [debtorId], references: [id])
+  amountUSD            Int
+  amountUZS            BigInt
+  collateral           Boolean
+  type                 CaseType
+  status               CaseStatus       @default(NEW)
+  dpd                  Int
+  assignedOrgId        String?
+  assignedOrg          Organization?    @relation("AssignedOrg", fields: [assignedOrgId], references: [id])
+  assignedUserId       String?
+  voluntaryPeriodDays  Int?
+  enforcementRoute     EnforcementRoute @default(NONE)
+  createdAt            DateTime         @default(now())
+  originatedAt         DateTime
+
+  events      CaseEvent[]
+  documents   CaseDocument[]
+  payments    Payment[]
+  costs       CostEntry[]
+  slas        SlaTimer[]
+  assignments Assignment[]
+  transfers   Transfer[]
+  visits      FieldVisit[]
+
+  @@index([assignedOrgId])
+  @@index([status])
+  @@index([tenantBankId])
+}
+
+// APPEND-ONLY: в API нет путей update/delete для событий.
+model CaseEvent {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id])
+  actorUserId String
+  actor       User     @relation(fields: [actorUserId], references: [id])
+  type        String
+  payload     Json     @default("{}")
+  result      String?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([caseId])
+  @@index([createdAt])
+}
+
+model CaseDocument {
+  id          String       @id @default(cuid())
+  caseId      String
+  case        Case         @relation(fields: [caseId], references: [id])
+  kind        DocumentKind
+  title       String
+  status      String       @default("READY")
+  signedByEds String?
+  bodyPreview String
+  generatedAt DateTime     @default(now())
+
+  @@index([caseId])
+}
+
+model Payment {
+  id           String      @id @default(cuid())
+  caseId       String
+  case         Case        @relation(fields: [caseId], references: [id])
+  amountUSD    Int
+  kind         PaymentKind
+  promisedDate DateTime?
+  paidAt       DateTime?
+
+  @@index([caseId])
+}
+
+model CostEntry {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  kind      CostKind
+  amountUSD Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+}
+
+model SlaTimer {
+  id       String   @id @default(cuid())
+  caseId   String
+  case     Case     @relation(fields: [caseId], references: [id])
+  type     String
+  dueAt    DateTime
+  breached Boolean  @default(false)
+
+  @@index([caseId])
+}
+
+model Assignment {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  fromOrgId String?
+  toOrgId   String
+  byUserId  String
+  reason    String?
+  at        DateTime @default(now())
+
+  @@index([caseId])
+}
+
+model Transfer {
+  id                         String         @id @default(cuid())
+  caseId                     String
+  case                       Case           @relation(fields: [caseId], references: [id])
+  amountUSD                  Int
+  initiatedByUserId          String
+  initiatedAt                DateTime       @default(now())
+  managerApprovedByUserId    String?
+  managerApprovedAt          DateTime?
+  accountantApprovedByUserId String?
+  accountantApprovedAt       DateTime?
+  status                     TransferStatus @default(INITIATED)
+
+  @@index([caseId])
+}
+
+model FieldVisit {
+  id              String       @id @default(cuid())
+  caseId          String
+  case            Case         @relation(fields: [caseId], references: [id])
+  collectorUserId String
+  collector       User         @relation(fields: [collectorUserId], references: [id])
+  lat             Float
+  lng             Float
+  startedAt       DateTime     @default(now())
+  endedAt         DateTime?
+  result          VisitResult?
+  note            String?
+
+  @@index([caseId])
+  @@index([collectorUserId])
+}

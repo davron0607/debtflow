@@ -23,7 +23,6 @@ import { Route as AppTeamRouteImport } from './routes/_app.team'
 import { Route as AppRoiRouteImport } from './routes/_app.roi'
 import { Route as AppQueueRouteImport } from './routes/_app.queue'
 import { Route as AppMyCasesRouteImport } from './routes/_app.my-cases'
-import { Route as AppModerationRouteImport } from './routes/_app.moderation'
 import { Route as AppMibRouteImport } from './routes/_app.mib'
 import { Route as AppIntegrationsRouteImport } from './routes/_app.integrations'
 import { Route as AppFieldRouteImport } from './routes/_app.field'
@@ -105,11 +104,6 @@ const AppMyCasesRoute = AppMyCasesRouteImport.update({
   path: '/my-cases',
   getParentRoute: () => AppRoute,
 } as any)
-const AppModerationRoute = AppModerationRouteImport.update({
-  id: '/moderation',
-  path: '/moderation',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppMibRoute = AppMibRouteImport.update({
   id: '/mib',
   path: '/mib',
@@ -182,7 +176,6 @@ export interface FileRoutesByFullPath {
   '/field': typeof AppFieldRoute
   '/integrations': typeof AppIntegrationsRoute
   '/mib': typeof AppMibRoute
-  '/moderation': typeof AppModerationRoute
   '/my-cases': typeof AppMyCasesRoute
   '/queue': typeof AppQueueRoute
   '/roi': typeof AppRoiRoute
@@ -209,7 +202,6 @@ export interface FileRoutesByTo {
   '/field': typeof AppFieldRoute
   '/integrations': typeof AppIntegrationsRoute
   '/mib': typeof AppMibRoute
-  '/moderation': typeof AppModerationRoute
   '/my-cases': typeof AppMyCasesRoute
   '/queue': typeof AppQueueRoute
   '/roi': typeof AppRoiRoute
@@ -238,7 +230,6 @@ export interface FileRoutesById {
   '/_app/field': typeof AppFieldRoute
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/mib': typeof AppMibRoute
-  '/_app/moderation': typeof AppModerationRoute
   '/_app/my-cases': typeof AppMyCasesRoute
   '/_app/queue': typeof AppQueueRoute
   '/_app/roi': typeof AppRoiRoute
@@ -267,7 +258,6 @@ export interface FileRouteTypes {
     | '/field'
     | '/integrations'
     | '/mib'
-    | '/moderation'
     | '/my-cases'
     | '/queue'
     | '/roi'
@@ -294,7 +284,6 @@ export interface FileRouteTypes {
     | '/field'
     | '/integrations'
     | '/mib'
-    | '/moderation'
     | '/my-cases'
     | '/queue'
     | '/roi'
@@ -322,7 +311,6 @@ export interface FileRouteTypes {
     | '/_app/field'
     | '/_app/integrations'
     | '/_app/mib'
-    | '/_app/moderation'
     | '/_app/my-cases'
     | '/_app/queue'
     | '/_app/roi'
@@ -444,13 +432,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMyCasesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/moderation': {
-      id: '/_app/moderation'
-      path: '/moderation'
-      fullPath: '/moderation'
-      preLoaderRoute: typeof AppModerationRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/mib': {
       id: '/_app/mib'
       path: '/mib'
@@ -541,7 +522,6 @@ interface AppRouteChildren {
   AppFieldRoute: typeof AppFieldRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppMibRoute: typeof AppMibRoute
-  AppModerationRoute: typeof AppModerationRoute
   AppMyCasesRoute: typeof AppMyCasesRoute
   AppQueueRoute: typeof AppQueueRoute
   AppRoiRoute: typeof AppRoiRoute
@@ -563,7 +543,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppFieldRoute: AppFieldRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppMibRoute: AppMibRoute,
-  AppModerationRoute: AppModerationRoute,
   AppMyCasesRoute: AppMyCasesRoute,
   AppQueueRoute: AppQueueRoute,
   AppRoiRoute: AppRoiRoute,
