@@ -7,6 +7,7 @@ import { fmtUSD, fmtDate } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import type { Case, CaseStatus } from "@/lib/store/types";
 import { STATUS_LABEL } from "@/lib/state-machine";
+import { ROLE_LABEL } from "@/lib/store/types";
 
 export const Route = createFileRoute("/_app/queue")({
   component: QueuePage,
@@ -78,7 +79,7 @@ function QueuePage() {
       <div className="mb-6">
         <h1 className="font-display text-3xl font-bold">Очередь задач</h1>
         <p className="text-sm text-muted-foreground">
-          Моя работа на сегодня — отсортирована по финансовому эффекту. Роль: {currentUser.name}.
+          Моя работа на сегодня — отсортирована по финансовому эффекту. Роль: {ROLE_LABEL[currentUser.role]} · {currentUser.name}.
         </p>
       </div>
 

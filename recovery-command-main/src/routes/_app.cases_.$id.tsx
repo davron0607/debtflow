@@ -19,6 +19,7 @@ import { STATUS_LABEL, allowedTransitions, statusTone } from "@/lib/state-machin
 import { StatusBadge } from "@/components/status-badge";
 import { LifecycleSpine } from "@/components/lifecycle-spine";
 import { DecisionPanel } from "@/components/decision-panel";
+import { PaymentChart } from "@/components/payment-chart";
 import type { CaseStatus, DocumentKind } from "@/lib/store/types";
 
 export const Route = createFileRoute("/_app/cases_/$id")({
@@ -383,6 +384,7 @@ function CaseDetail() {
           )}
           {tab === "payments" && (
             <div className="space-y-2">
+              <PaymentChart c={c} payments={payments} />
               {payments.length === 0 && <Empty label="Платежей и обещаний пока нет." />}
               {payments.map((p) => (
                 <div key={p.id} className="flex items-center justify-between rounded-md border border-border bg-surface-2 p-3 text-sm">

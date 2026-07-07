@@ -19,6 +19,7 @@ import {
   MapPinned,
   Inbox,
   ShieldCheck,
+  Trophy,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
 import { LogoMark } from "@/components/logo";
@@ -67,6 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/agencies", label: "Решения по агентствам", icon: Building2, roles: ["BANK_ADMIN", "BANK_LEGAL"] },
       { to: "/tracking", label: "Эффективность коллекторов", icon: MapPinned, roles: ["BANK_ADMIN", "BANK_LEGAL", "MANAGER"] },
+      { to: "/team", label: "Рейтинг команды", icon: Trophy, roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "LEGAL_FIRM", "MANAGER", "ACCOUNTANT"] },
     ],
   },
   {
