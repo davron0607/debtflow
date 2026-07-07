@@ -74,9 +74,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/moderation", label: "Модерация организаций", icon: ShieldCheck, roles: ["PLATFORM_ADMIN"] },
       { to: "/users", label: "Пользователи и роли", icon: UserCog, roles: ["BANK_ADMIN", "MANAGER"] },
-      { to: "/audit", label: "Аудит-журнал", icon: ScrollText },
-      { to: "/mib", label: "МИБ / БПИ", icon: Radio, badge: "V2" },
-      { to: "/integrations", label: "Интеграции", icon: Plug, badge: "V2" },
+      { to: "/audit", label: "Аудит-журнал", icon: ScrollText, roles: ["BANK_ADMIN", "BANK_LEGAL", "MANAGER"] },
+      { to: "/mib", label: "МИБ / БПИ", icon: Radio, badge: "V2", roles: ["BANK_ADMIN", "BANK_LEGAL"] },
+      { to: "/integrations", label: "Интеграции", icon: Plug, badge: "V2", roles: ["BANK_ADMIN", "BANK_LEGAL"] },
     ],
   },
 ];

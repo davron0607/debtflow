@@ -70,17 +70,17 @@ const T: Record<CaseStatus, Transition[]> = {
     { to: "ESCALATED_TO_LEGAL", roles: ["BANK_ADMIN"], label: "Эскалация" },
   ],
   PROMISE_TO_PAY: [
-    { to: "PARTIALLY_PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Частичная оплата" },
-    { to: "PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Полная оплата" },
-    { to: "PROMISE_BROKEN", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Обещание нарушено" },
+    { to: "PARTIALLY_PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "ACCOUNTANT"], label: "Частичная оплата" },
+    { to: "PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "ACCOUNTANT"], label: "Оплата получена (подтвердить)" },
+    { to: "PROMISE_BROKEN", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "ACCOUNTANT"], label: "Оплата не поступила" },
   ],
   PROMISE_BROKEN: [
     { to: "SOFT_COLLECTION", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Продолжить" },
     { to: "ESCALATED_TO_LEGAL", roles: ["BANK_ADMIN"], label: "Эскалация" },
   ],
   PARTIALLY_PAID: [
-    { to: "PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Полная оплата" },
-    { to: "PROMISE_BROKEN", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"], label: "Обещание нарушено" },
+    { to: "PAID", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "ACCOUNTANT"], label: "Оплата получена (подтвердить)" },
+    { to: "PROMISE_BROKEN", roles: ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR", "ACCOUNTANT"], label: "Оплата не поступила" },
   ],
   PAID: [
     { to: "CLOSED", roles: ["BANK_ADMIN"], label: "Закрыть дело" },

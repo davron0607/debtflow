@@ -669,7 +669,7 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
+    if (!isCollector(u) && u.role !== "BANK_ADMIN" && u.role !== "ACCOUNTANT") forbid();
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.payment.create({
       data: { caseId: c.id, amountUSD: data.amountUSD, kind: data.kind, paidAt: new Date() },

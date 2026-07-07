@@ -5,7 +5,8 @@ import { useStore } from "@/lib/store/store";
 import { caseReco, suggestAgencies, type CaseReco } from "@/lib/decision-engine";
 import { fmtUSD, fmtDate } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
-import type { Case } from "@/lib/store/types";
+import type { Case, CaseStatus } from "@/lib/store/types";
+import { STATUS_LABEL } from "@/lib/state-machine";
 
 export const Route = createFileRoute("/_app/queue")({
   component: QueuePage,
@@ -17,6 +18,7 @@ function QueuePage() {
   const navigate = useNavigate();
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<CaseStatus | "ALL">("ALL");
 
   const items = useMemo(() => {
     const rows = scopedCases()
@@ -34,14 +36,15 @@ function QueuePage() {
 
   const promisesDue = useMemo(
     () =>
-      db.payments.filter(
-        (p) =>
-          p.kind === "PROMISE" &&
-          p.promisedDate &&
-          !p.paidAt &&
-          new Date(p.promisedDate).getTime() - Date.now() < 2 * 86400000 &&
-          scopedCases().some((c) => c.id === p.caseId),
-      ),
+      db.payments
+        .filter((p) => {
+          if (p.kind !== "PROMISE" || !p.promisedDate || p.paidAt) return false;
+          // только по открытым делам, где обещание ещё актуально
+          const c = scopedCases().find((x) => x.id === p.caseId);
+          if (!c || !["PROMISE_TO_PAY", "PARTIALLY_PAID"].includes(c.status)) return false;
+          return new Date(p.promisedDate).getTime() - Date.now() < 2 * 86400000;
+        })
+        .sort((a, b) => (a.promisedDate! < b.promisedDate! ? -1 : 1)),
     [db.payments, scopedCases],
   );
 
@@ -91,31 +94,73 @@ function QueuePage() {
       {promisesDue.length > 0 && (
         <div className="mb-4 rounded-lg border border-border bg-surface p-4">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Обещания оплаты: срок ≤ 2 дней
+            Обещания оплаты: просроченные и ближайшие 2 дня
           </div>
           <div className="flex flex-wrap gap-2">
             {promisesDue.map((p) => {
               const c = db.cases.find((x) => x.id === p.caseId);
+              if (!c) return null;
+              const d = db.debtors.find((x) => x.id === c.debtorId);
+              const overdueDays = Math.floor((Date.now() - new Date(p.promisedDate!).getTime()) / 86400000);
+              const overdue = overdueDays > 0;
               return (
-                c && (
-                  <Link
-                    key={p.id}
-                    to="/cases/$id"
-                    params={{ id: c.id }}
-                    className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs hover:border-primary"
-                  >
-                    <span className="font-mono text-primary">{c.code}</span> · {fmtUSD(p.amountUSD)} до{" "}
-                    {fmtDate(p.promisedDate!)}
-                  </Link>
-                )
+                <Link
+                  key={p.id}
+                  to="/cases/$id"
+                  params={{ id: c.id }}
+                  title={`${d?.name}: должник обещал внести ${fmtUSD(p.amountUSD)} до ${fmtDate(p.promisedDate!)}`}
+                  className={
+                    "rounded-md border px-2 py-1 text-xs " +
+                    (overdue
+                      ? "border-destructive/40 bg-destructive/10 hover:border-destructive"
+                      : "border-border bg-surface-2 hover:border-primary")
+                  }
+                >
+                  <span className="font-mono text-primary">{c.code}</span> · {d?.name} · обещал{" "}
+                  {fmtUSD(p.amountUSD)}{" "}
+                  {overdue ? (
+                    <span className="font-medium text-destructive">просрочено {overdueDays} дн (до {fmtDate(p.promisedDate!)})</span>
+                  ) : (
+                    <>до {fmtDate(p.promisedDate!)}</>
+                  )}
+                </Link>
               );
             })}
           </div>
         </div>
       )}
 
+      {/* Фильтр и сводка по статусам */}
+      {items.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setStatusFilter("ALL")}
+            className={
+              "rounded-full border px-3 py-1 text-xs " +
+              (statusFilter === "ALL" ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted-foreground hover:border-primary/40")
+            }
+          >
+            Все · {items.length}
+          </button>
+          {[...new Map(items.map((x) => [x.c.status, items.filter((y) => y.c.status === x.c.status).length])).entries()].map(
+            ([s, n]) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(statusFilter === s ? "ALL" : s)}
+                className={
+                  "rounded-full border px-3 py-1 text-xs " +
+                  (statusFilter === s ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted-foreground hover:border-primary/40")
+                }
+              >
+                {STATUS_LABEL[s]} · {n}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
-        {items.map(({ c, r }) => {
+        {items.filter(({ c }) => statusFilter === "ALL" || c.status === statusFilter).map(({ c, r }) => {
           const d = db.debtors.find((x) => x.id === c.debtorId);
           return (
             <div key={c.id} className="rounded-lg border border-border bg-surface p-4">

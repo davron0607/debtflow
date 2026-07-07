@@ -194,9 +194,12 @@ function CaseDetail() {
           </div>
         )}
 
-        {/* Collector inline actions */}
-        {currentUser.role === "COLLECTOR" && c.assignedOrgId === currentUser.orgId && (
+        {/* Collector / accountant inline actions */}
+        {(["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"].includes(currentUser.role) ||
+          currentUser.role === "ACCOUNTANT") &&
+          c.assignedOrgId === currentUser.orgId && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {currentUser.role !== "ACCOUNTANT" && (<>
             <div className="rounded-md border border-border bg-surface-2 p-3">
               <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Лог контакта</div>
               <textarea
@@ -234,8 +237,11 @@ function CaseDetail() {
                 Зафиксировать обещание
               </button>
             </div>
+            </>)}
             <div className="rounded-md border border-border bg-surface-2 p-3">
-              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Записать платёж</div>
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                {currentUser.role === "ACCOUNTANT" ? "Подтверждение оплаты" : "Записать платёж"}
+              </div>
               <input type="number" value={paymentAmt} onChange={(e) => setPaymentAmt(e.target.value)} placeholder="Сумма USD"
                 className="mb-2 w-full rounded border border-input bg-background p-1.5 text-xs" />
               <div className="flex gap-2">
@@ -254,7 +260,7 @@ function CaseDetail() {
                   Полностью
                 </button>
               </div>
-              {c.status === "PAID" && (
+              {c.status === "PAID" && currentUser.role === "COLLECTOR" && (
                 <button
                   onClick={() => initiateTransfer(c.id, c.amountUSD)}
                   className="mt-2 w-full rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
