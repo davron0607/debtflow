@@ -691,9 +691,15 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
     });
     await audit(u.id, c.id, "PAYMENT_RECORDED", { amountUSD: data.amountUSD, kind: data.kind });
     // Статус определяется фактическим остатком, а не заявленным kind — иначе
-    // "Полностью" на неполную сумму преждевременно закрывает дело.
+    // "Полностью" на неполную сумму преждевременно закрывает дело. Деньги
+    // получены — это факт, а не переход по графу T: раньше проверка через
+    // canTransition() молча "теряла" оплату, если у текущего статуса
+    // (SOFT_COLLECTION, NO_CONTACT, DISPUTE и т.д.) не было прямого ребра к
+    // PAID/PARTIALLY_PAID — остаток обнулялся, а карточка оставалась
+    // подвешена на досудебной стадии.
     const to = remaining - data.amountUSD <= 0 ? "PAID" : "PARTIALLY_PAID";
-    if (canTransition(c.status as CaseStatus, to, u.role as UserRole)) {
+    const terminal: CaseStatus[] = ["CLOSED", "WRITTEN_OFF"];
+    if (!terminal.includes(c.status as CaseStatus) && c.status !== to) {
       await prisma.case.update({ where: { id: c.id }, data: { status: to } });
       await audit(u.id, c.id, "STATUS_CHANGED", { from: c.status, to });
     }
