@@ -86,6 +86,8 @@ function CaseDetail() {
   const totalCosts = costs.reduce((s, k) => s + k.amountUSD, 0);
   const totalPaid = payments.filter((p) => p.paidAt).reduce((s, p) => s + p.amountUSD, 0);
   const remaining = Math.max(0, c.amountUSD - totalPaid);
+  // Взыскание завершено — исполнитель закреплён навсегда (важно для рейтинга коллекторов)
+  const isCaseClosed = ["PAID", "CLOSED", "WRITTEN_OFF"].includes(c.status);
 
   const commitTransition = (to: CaseStatus) => {
     const destructive = to === "WRITTEN_OFF" || to === "CLOSED";
@@ -149,9 +151,10 @@ function CaseDetail() {
             ) : (
               <span>Не назначено</span>
             )}
-            {/* Исполнитель внутри организации: учёт и GPS привязаны к сотруднику */}
+            {/* Исполнитель внутри организации: учёт и GPS привязаны к сотруднику.
+                После завершения взыскания — закреплён навсегда (влияет на рейтинг). */}
             {org && (
-              ["MANAGER", "BANK_ADMIN"].includes(currentUser.role) && currentUser.orgId === org.id ? (
+              ["MANAGER", "BANK_ADMIN"].includes(currentUser.role) && currentUser.orgId === org.id && !isCaseClosed ? (
                 <label className="flex items-center gap-1.5">
                   Исполнитель:
                   <select
@@ -175,6 +178,7 @@ function CaseDetail() {
               ) : c.assignedUserId ? (
                 <span>
                   Исполнитель: <b className="text-foreground">{db.users.find((x) => x.id === c.assignedUserId)?.name ?? "—"}</b>
+                  {isCaseClosed && <span className="text-muted-foreground"> (закреплён)</span>}
                 </span>
               ) : (
                 <span className="text-money">Исполнитель не распределён</span>

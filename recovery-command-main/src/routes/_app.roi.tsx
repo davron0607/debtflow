@@ -13,7 +13,8 @@ function RoiPage() {
   const { db, transitionStatus, setEnforcementRoute, currentUser } = useStore();
   const [selected, setSelected] = useState<string>(db.cases[0]?.id ?? "");
   const [pOverride, setPOverride] = useState<number | null>(null);
-  const [extraCostsUSD, setExtraCostsUSD] = useState(0);
+  const [extraCostsInput, setExtraCostsInput] = useState("");
+  const extraCostsUSD = extraCostsInput === "" ? 0 : Number(extraCostsInput);
 
   const c = db.cases.find((x) => x.id === selected);
   const pEngine = c ? recoveryProbability(db, c) : 0;
@@ -69,7 +70,7 @@ function RoiPage() {
           <input type="range" min={0} max={100} value={pRecovery} onChange={(e) => setPOverride(Number(e.target.value))} className="mb-4 w-full" />
 
           <label className="mb-1 block text-xs text-muted-foreground">Дополнительные расходы (USD)</label>
-          <input type="number" value={extraCostsUSD} onChange={(e) => setExtraCostsUSD(Number(e.target.value))}
+          <input type="number" value={extraCostsInput} onChange={(e) => setExtraCostsInput(e.target.value.replace(/^0+(?=\d)/, ""))}
             className="w-full rounded border border-input bg-background p-2 text-sm" />
 
           <div className="mt-4 grid grid-cols-2 gap-3">

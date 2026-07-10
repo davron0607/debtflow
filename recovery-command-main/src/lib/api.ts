@@ -533,10 +533,17 @@ export const apiAssign = createServerFn({ method: "POST" })
       forbid("Назначать можно коллекторам, юр. фирмам или собственной службе");
     if (c.assignedOrgId && !data.reason?.trim())
       return { ok: false, error: "Переназначение требует обоснования (аудит)" };
+    // Смена агентства обнуляет исполнителя: прежний сотрудник — из старой
+    // организации и не обязан (и часто не может) работать в новой.
+    const orgChanged = c.assignedOrgId !== data.toOrgId;
     await prisma.$transaction([
       prisma.case.update({
         where: { id: c.id },
-        data: { assignedOrgId: data.toOrgId, status: c.status === "NEW" ? "ASSIGNED" : c.status },
+        data: {
+          assignedOrgId: data.toOrgId,
+          status: c.status === "NEW" ? "ASSIGNED" : c.status,
+          ...(orgChanged ? { assignedUserId: null } : {}),
+        },
       }),
       prisma.assignment.create({
         data: {
@@ -565,6 +572,10 @@ export const apiAssignUser = createServerFn({ method: "POST" })
     // Дело должно быть назначено организации текущего пользователя
     const c = await prisma.case.findFirst({ where: { id: data.caseId, assignedOrgId: u.orgId } });
     if (!c) forbid("Дело не назначено вашей организации");
+    // После завершения взыскания исполнитель закрепляется навсегда — иначе
+    // задачу можно перекинуть уже после того, как результат засчитан в рейтинг.
+    if (["PAID", "CLOSED", "WRITTEN_OFF"].includes(c.status))
+      forbid("Дело завершено — исполнитель закреплён и не может быть изменён");
     let target: User | null = null;
     if (data.userId) {
       target = await prisma.user.findUnique({ where: { id: data.userId } });
