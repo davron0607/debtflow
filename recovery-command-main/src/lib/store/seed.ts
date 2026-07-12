@@ -35,6 +35,11 @@ const orgs: Organization[] = [
 const users: User[] = [
   { id: "u_admin", orgId: BANK_ID, name: "Дилшод Каримов", email: "admin@tengebank.uz", role: "BANK_ADMIN" },
   { id: "u_legal", orgId: BANK_ID, name: "Мадина Юсупова", email: "legal@tengebank.uz", role: "BANK_LEGAL", edsOperational: "EDS-TB-0042" },
+  // In-house взыскание банка: софт/хард-коллекторы и бухгалтер в штате самого
+  // банка (для дел, которые банк ведёт сам, не передавая внешнему агентству).
+  { id: "u_soft_bank", orgId: BANK_ID, name: "Отабек Юлдашев", email: "otabek@tengebank.uz", role: "SOFT_COLLECTOR" },
+  { id: "u_hard_bank", orgId: BANK_ID, name: "Шерзод Тошпулатов", email: "sherzod@tengebank.uz", role: "HARD_COLLECTOR" },
+  { id: "u_acc_bank", orgId: BANK_ID, name: "Гулбахор Эркинова", email: "gulbahor@tengebank.uz", role: "ACCOUNTANT" },
   { id: "u_collector_a", orgId: AGENCY_A_ID, name: "Азиз Рахимов", email: "aziz@alpha-collect.uz", role: "COLLECTOR" },
   { id: "u_manager_a", orgId: AGENCY_A_ID, name: "Севара Ахмедова", email: "sevara@alpha-collect.uz", role: "MANAGER" },
   { id: "u_acc_a", orgId: AGENCY_A_ID, name: "Бекзод Норов", email: "bekzod@alpha-collect.uz", role: "ACCOUNTANT" },

@@ -27,6 +27,7 @@ import { logEvent } from "./backend/log";
 import { sendMail } from "./mail/resend";
 import { getRequestHost, getRequestProtocol, getRequestIP } from "@tanstack/react-start/server";
 import { canTransition } from "./state-machine";
+import { ORG_ROLES } from "./store/types";
 import type { DB as SnapshotDB, UserRole, CaseStatus } from "./store/types";
 
 // ——— RBAC-хелперы ———
@@ -70,6 +71,18 @@ async function requireCaseInScope(u: User, caseId: string) {
 function requireOwnCase<T extends { assignedUserId: string | null }>(u: User, c: T): T {
   if (isCollector(u) && c.assignedUserId && c.assignedUserId !== u.id) {
     forbid("Дело назначено другому сотруднику");
+  }
+  return c;
+}
+
+// Банк видит весь свой портфель (caseScope: tenantBankId), но как только дело
+// передано внешнему агентству/юрфирме — работа по существу (контакт, оплата,
+// обещание, документы, расходы, маршрут) должна идти через них, а не банк
+// напрямую. Банк либо ждёт, либо отзывает дело через apiAssign — только так,
+// без бокового доступа в обход агентства.
+function requireNotHandedOff<T extends { assignedOrgId: string | null }>(u: User, c: T): T {
+  if (isBank(u) && c.assignedOrgId && c.assignedOrgId !== u.orgId) {
+    forbid("Дело передано внешнему исполнителю — отзовите его, чтобы действовать напрямую");
   }
   return c;
 }
@@ -527,6 +540,11 @@ export const apiAssign = createServerFn({ method: "POST" })
     // Тенант-скоуп: банк распоряжается только собственным портфелем
     const c = await prisma.case.findFirst({ where: { id: data.caseId, tenantBankId: u.orgId } });
     if (!c) forbid("Дело не найдено или недоступно");
+    // Тот же лок, что и у apiAssignUser: завершённое дело нельзя перекинуть
+    // на другое агентство задним числом — это исказило бы рейтинг обеих
+    // организаций (см. docs/case-lifecycle.md).
+    if (["PAID", "CLOSED", "WRITTEN_OFF"].includes(c.status))
+      forbid("Дело завершено — переназначение агентства недоступно");
     const target = await prisma.organization.findUnique({ where: { id: data.toOrgId } });
     const inHouse = target?.id === u.orgId; // собственная служба взыскания банка
     if (!target || (!inHouse && target.type !== "COLLECTOR" && target.type !== "LEGAL_FIRM"))
@@ -623,7 +641,7 @@ export const apiLogContact = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
-    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
+    const c = requireOwnCase(u, requireNotHandedOff(u, await requireCaseInScope(u, data.caseId)));
     await audit(u.id, c.id, "CONTACT_LOGGED", { note: data.note, result: data.result, channel: data.channel, nextContactAt: data.nextContactAt });
     if (
       (c.status === "ASSIGNED" || c.status === "SOFT_COLLECTION") &&
@@ -646,7 +664,7 @@ export const apiLogPromise = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
-    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
+    const c = requireOwnCase(u, requireNotHandedOff(u, await requireCaseInScope(u, data.caseId)));
     await prisma.$transaction([
       prisma.payment.create({
         data: { caseId: c.id, amountUSD: data.amountUSD, kind: "PROMISE", promisedDate: new Date(data.promisedDate) },
@@ -676,7 +694,7 @@ export const apiRecordPayment = createServerFn({ method: "POST" })
     // Бухгалтер здесь ни при чём: его функция — согласование переводов
     // (см. apiApproveTransfer), а не подтверждение оплаты по делу.
     if (!isCollector(u) && u.role !== "BANK_ADMIN") forbid();
-    const c = requireOwnCase(u, await requireCaseInScope(u, data.caseId));
+    const c = requireOwnCase(u, requireNotHandedOff(u, await requireCaseInScope(u, data.caseId)));
     const priorPayments = await prisma.payment.findMany({
       where: { caseId: c.id, kind: { in: ["FULL", "PARTIAL"] }, paidAt: { not: null } },
       select: { amountUSD: true },
@@ -718,7 +736,7 @@ export const apiGenerateDocument = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!["BANK_ADMIN", "BANK_LEGAL", "LEGAL_FIRM"].includes(u.role)) forbid();
-    const c = await requireCaseInScope(u, data.caseId);
+    const c = requireNotHandedOff(u, await requireCaseInScope(u, data.caseId));
     const previews: Record<string, string> = {
       PRE_CLAIM: "Настоящим уведомляем о необходимости погашения задолженности в срок 10 дней...",
       COURT_PACKAGE: "Исковое заявление, расчёт задолженности, копия договора, выписка по счёту...",
@@ -759,7 +777,7 @@ export const apiAddCost = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    const c = await requireCaseInScope(u, data.caseId);
+    const c = requireNotHandedOff(u, await requireCaseInScope(u, data.caseId));
     await prisma.costEntry.create({
       data: { caseId: c.id, kind: data.kind, amountUSD: data.amountUSD, note: data.note },
     });
@@ -772,7 +790,7 @@ export const apiSetRoute = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
     if (!["BANK_ADMIN", "BANK_LEGAL"].includes(u.role)) forbid();
-    const c = await requireCaseInScope(u, data.caseId);
+    const c = requireNotHandedOff(u, await requireCaseInScope(u, data.caseId));
     await prisma.case.update({
       where: { id: c.id },
       data: { enforcementRoute: data.route, voluntaryPeriodDays: 10 },
@@ -786,7 +804,10 @@ export const apiInitiateTransfer = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), amountUSD: z.number().int().positive().max(100_000_000) }))
   .handler(async ({ data }) => {
     const u = await requireUserMutation();
-    if (u.role !== "COLLECTOR") forbid("Перевод инициирует коллектор агентства");
+    // Коллектор агентства/юрфирмы либо софт/хард-коллектор банка (in-house
+    // взыскание) — у банка нет отдельной роли COLLECTOR, но деньги собирают
+    // именно SOFT_COLLECTOR/HARD_COLLECTOR.
+    if (!isCollector(u)) forbid("Перевод инициирует сотрудник, работающий по делу");
     const c = await requireCaseInScope(u, data.caseId);
     await prisma.transfer.create({
       data: { caseId: c.id, amountUSD: data.amountUSD, initiatedByUserId: u.id },
@@ -803,12 +824,13 @@ export const apiApproveTransfer = createServerFn({ method: "POST" })
     if (!t) forbid();
     // Скоуп: менеджер/бухгалтер своей организации
     if (t.case.assignedOrgId !== u.orgId) forbid();
-    if (u.role === "MANAGER" && t.status === "INITIATED") {
+    // У банка нет роли MANAGER — первое согласование там делает BANK_ADMIN.
+    if ((u.role === "MANAGER" || u.role === "BANK_ADMIN") && t.status === "INITIATED") {
       await prisma.transfer.update({
         where: { id: t.id },
         data: { status: "MANAGER_APPROVED", managerApprovedByUserId: u.id, managerApprovedAt: new Date() },
       });
-      await audit(u.id, t.caseId, "TRANSFER_APPROVED", { role: "MANAGER", transferId: t.id });
+      await audit(u.id, t.caseId, "TRANSFER_APPROVED", { role: u.role, transferId: t.id });
       return { ok: true };
     }
     if (u.role === "ACCOUNTANT" && t.status === "MANAGER_APPROVED") {
@@ -934,6 +956,12 @@ export const apiAddUser = createServerFn({ method: "POST" })
     const exists = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
     if (exists) return { ok: false as const, error: "Пользователь с таким e-mail уже существует" };
     const org = await prisma.organization.findUnique({ where: { id: u.orgId } });
+    // Разрешённые роли зависят от типа организации (банк не заводит себе
+    // "коллектора"-агентство, агентство не заводит "банк-админа") — раньше
+    // это проверялось только в UI-дропдауне, серверная функция принимала
+    // любую роль из общего enum.
+    if (!org || !ORG_ROLES[org.type].includes(data.role))
+      return { ok: false as const, error: "Эта роль недоступна для организации такого типа" };
     const created = await prisma.user.create({
       data: {
         orgId: data.orgId,

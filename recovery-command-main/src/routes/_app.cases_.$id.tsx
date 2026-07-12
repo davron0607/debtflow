@@ -333,7 +333,7 @@ function CaseDetail() {
                   Полностью ({fmtUSD(remaining)})
                 </button>
               </div>
-              {c.status === "PAID" && currentUser.role === "COLLECTOR" && (
+              {c.status === "PAID" && ["COLLECTOR", "SOFT_COLLECTOR", "HARD_COLLECTOR"].includes(currentUser.role) && (
                 <button
                   onClick={() => initiateTransfer(c.id, c.amountUSD)}
                   className="mt-2 w-full rounded bg-primary px-2 py-1 text-xs text-primary-foreground"

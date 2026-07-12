@@ -72,7 +72,7 @@ function TransfersPage() {
                 />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {!managerApproved && currentUser.role === "MANAGER" && (
+                {!managerApproved && (currentUser.role === "MANAGER" || currentUser.role === "BANK_ADMIN") && (
                   <button onClick={() => approveTransferAsManager(t.id)} className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground">
                     Одобрить (менеджер)
                   </button>

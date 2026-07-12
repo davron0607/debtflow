@@ -107,7 +107,7 @@ const T: Record<CaseStatus, Transition[]> = {
   ],
   PRE_CLAIM_SENT: [
     { to: "COURT_PACKAGE_READY", roles: ["BANK_LEGAL", "LEGAL_FIRM"], label: "Готовить пакет" },
-    { to: "PAID", roles: ["BANK_LEGAL"], label: "Оплачено после претензии" },
+    { to: "PAID", roles: ["BANK_LEGAL", "LEGAL_FIRM"], label: "Оплачено после претензии" },
   ],
   COURT_PACKAGE_READY: [
     { to: "FILED_TO_COURT", roles: ["BANK_LEGAL", "LEGAL_FIRM"], label: "Подать в суд (вручную)" },
