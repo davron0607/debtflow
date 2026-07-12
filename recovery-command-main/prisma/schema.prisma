@@ -376,3 +376,66 @@ model FieldVisit {
   @@index([caseId])
   @@index([collectorUserId])
 }
+
+// ——— Биллинг: взаиморасчёты банк ↔ агентство/юрфирма ———
+
+// Ставка вознаграждения (success fee, % от фактически взысканного) —
+// договорённость конкретной пары банк ↔ исполнитель. Задаёт банк.
+model BillingAgreement {
+  id            String   @id @default(cuid())
+  bankId        String
+  agencyId      String
+  commissionPct Int // целые проценты, напр. 25 = 25% от взысканного
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([bankId, agencyId])
+}
+
+enum InvoiceStatus {
+  DRAFT    // сформирован системой, ещё не отправлен банку
+  ISSUED   // выставлен банку
+  PAID     // банк подтвердил оплату
+  DISPUTED // банк оспорил (с причиной), агентство может пересформировать
+}
+
+// Счёт-фактура за календарный месяц: комиссия исполнителя от суммы платежей,
+// зафиксированных по делам этого банка в отчётном периоде.
+model Invoice {
+  id            String        @id @default(cuid())
+  number        String        @unique // человекочитаемый номер, напр. INV-2026-07-ALPHA-TENGE
+  bankId        String
+  agencyId      String
+  periodYear    Int
+  periodMonth   Int // 1-12
+  commissionPct Int // зафиксированная на момент формирования ставка
+  baseAmountUSD Int // сумма взысканного за период (база)
+  amountUSD     Int // комиссия к оплате = base * pct / 100 (округление вниз)
+  status        InvoiceStatus @default(DRAFT)
+  issuedAt      DateTime?
+  paidAt        DateTime?
+  disputedAt    DateTime?
+  disputeReason String?
+  createdAt     DateTime      @default(now())
+
+  lines InvoiceLine[]
+
+  // один счёт на пару банк↔исполнитель за период; пересформирование
+  // (после спора) заменяет строки внутри того же счёта
+  @@unique([bankId, agencyId, periodYear, periodMonth])
+  @@index([agencyId])
+  @@index([bankId])
+}
+
+// Детализация счёта: по каждому делу — сколько взыскано за период и комиссия.
+model InvoiceLine {
+  id            String  @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  caseId        String
+  caseCode      String // денормализовано, чтобы счёт читался даже без доступа к делу
+  recoveredUSD  Int
+  commissionUSD Int
+
+  @@index([invoiceId])
+}

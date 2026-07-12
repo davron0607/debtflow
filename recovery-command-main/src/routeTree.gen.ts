@@ -29,6 +29,7 @@ import { Route as AppFieldRouteImport } from './routes/_app.field'
 import { Route as AppCourtRouteImport } from './routes/_app.court'
 import { Route as AppControlTowerRouteImport } from './routes/_app.control-tower'
 import { Route as AppCasesRouteImport } from './routes/_app.cases'
+import { Route as AppBillingRouteImport } from './routes/_app.billing'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
 import { Route as AppAssignmentsRouteImport } from './routes/_app.assignments'
 import { Route as AppAgenciesRouteImport } from './routes/_app.agencies'
@@ -134,6 +135,11 @@ const AppCasesRoute = AppCasesRouteImport.update({
   path: '/cases',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBillingRoute = AppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/agencies': typeof AppAgenciesRoute
   '/assignments': typeof AppAssignmentsRoute
   '/audit': typeof AppAuditRoute
+  '/billing': typeof AppBillingRoute
   '/cases': typeof AppCasesRoute
   '/control-tower': typeof AppControlTowerRoute
   '/court': typeof AppCourtRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/agencies': typeof AppAgenciesRoute
   '/assignments': typeof AppAssignmentsRoute
   '/audit': typeof AppAuditRoute
+  '/billing': typeof AppBillingRoute
   '/cases': typeof AppCasesRoute
   '/control-tower': typeof AppControlTowerRoute
   '/court': typeof AppCourtRoute
@@ -224,6 +232,7 @@ export interface FileRoutesById {
   '/_app/agencies': typeof AppAgenciesRoute
   '/_app/assignments': typeof AppAssignmentsRoute
   '/_app/audit': typeof AppAuditRoute
+  '/_app/billing': typeof AppBillingRoute
   '/_app/cases': typeof AppCasesRoute
   '/_app/control-tower': typeof AppControlTowerRoute
   '/_app/court': typeof AppCourtRoute
@@ -252,6 +261,7 @@ export interface FileRouteTypes {
     | '/agencies'
     | '/assignments'
     | '/audit'
+    | '/billing'
     | '/cases'
     | '/control-tower'
     | '/court'
@@ -278,6 +288,7 @@ export interface FileRouteTypes {
     | '/agencies'
     | '/assignments'
     | '/audit'
+    | '/billing'
     | '/cases'
     | '/control-tower'
     | '/court'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/_app/agencies'
     | '/_app/assignments'
     | '/_app/audit'
+    | '/_app/billing'
     | '/_app/cases'
     | '/_app/control-tower'
     | '/_app/court'
@@ -474,6 +486,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCasesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/billing': {
+      id: '/_app/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof AppBillingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -516,6 +535,7 @@ interface AppRouteChildren {
   AppAgenciesRoute: typeof AppAgenciesRoute
   AppAssignmentsRoute: typeof AppAssignmentsRoute
   AppAuditRoute: typeof AppAuditRoute
+  AppBillingRoute: typeof AppBillingRoute
   AppCasesRoute: typeof AppCasesRoute
   AppControlTowerRoute: typeof AppControlTowerRoute
   AppCourtRoute: typeof AppCourtRoute
@@ -537,6 +557,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAgenciesRoute: AppAgenciesRoute,
   AppAssignmentsRoute: AppAssignmentsRoute,
   AppAuditRoute: AppAuditRoute,
+  AppBillingRoute: AppBillingRoute,
   AppCasesRoute: AppCasesRoute,
   AppControlTowerRoute: AppControlTowerRoute,
   AppCourtRoute: AppCourtRoute,

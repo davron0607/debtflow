@@ -21,6 +21,7 @@ import {
   Inbox,
   Trophy,
   Menu,
+  Receipt,
   X,
 } from "lucide-react";
 import { useStore } from "@/lib/store/store";
@@ -63,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/assignments", label: "Назначения / Маркет", icon: Users, roles: ["BANK_ADMIN"] },
       { to: "/court", label: "Суд (ручное ведение)", icon: Scale, roles: ["BANK_ADMIN", "BANK_LEGAL", "LEGAL_FIRM"] },
       { to: "/transfers", label: "Перевод средств", icon: Wallet, roles: ["COLLECTOR", "MANAGER", "ACCOUNTANT", "BANK_ADMIN"] },
+      { to: "/billing", label: "Взаиморасчёты", icon: Receipt, roles: ["BANK_ADMIN", "MANAGER", "ACCOUNTANT"] },
     ],
   },
   {

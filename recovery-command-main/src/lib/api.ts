@@ -844,6 +844,223 @@ export const apiApproveTransfer = createServerFn({ method: "POST" })
     forbid("Неверный шаг цепочки согласования");
   });
 
+// ——— Биллинг: взаиморасчёты банк ↔ агентство за отчётный месяц ———
+// Success fee: комиссия = ставка пары банк↔исполнитель × сумма платежей
+// (FULL/PARTIAL), зафиксированных по делам банка за календарный месяц.
+
+const BILLING_ROLES: UserRole[] = ["BANK_ADMIN", "MANAGER", "ACCOUNTANT"];
+const canBill = (u: User) => BILLING_ROLES.includes(u.role as UserRole);
+
+// Банк задаёт ставку вознаграждения для конкретного исполнителя.
+export const apiSetCommission = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ agencyId: z.string(), commissionPct: z.number().int().min(1).max(90) }))
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (u.role !== "BANK_ADMIN") forbid("Ставку вознаграждения задаёт администратор банка");
+    await requireActiveOrg(u);
+    const agency = await prisma.organization.findUnique({ where: { id: data.agencyId } });
+    if (!agency || (agency.type !== "COLLECTOR" && agency.type !== "LEGAL_FIRM"))
+      forbid("Ставка задаётся для коллекторского агентства или юрфирмы");
+    await prisma.billingAgreement.upsert({
+      where: { bankId_agencyId: { bankId: u.orgId, agencyId: data.agencyId } },
+      update: { commissionPct: data.commissionPct },
+      create: { bankId: u.orgId, agencyId: data.agencyId, commissionPct: data.commissionPct },
+    });
+    logEvent("info", "billing_commission_set", { bankId: u.orgId, agencyId: data.agencyId, pct: data.commissionPct });
+    return { ok: true as const };
+  });
+
+// Обзор для страницы биллинга: ставки + счета, видимые текущей стороне.
+export const apiBillingOverview = createServerFn({ method: "GET" }).handler(async () => {
+  const u = await requireUser();
+  if (!canBill(u)) forbid("Биллинг доступен администратору банка, менеджеру и бухгалтеру");
+  const org = await prisma.organization.findUnique({ where: { id: u.orgId } });
+  if (!org) forbid();
+  const side = org.type === "BANK" || org.type === "MFO" ? "bank" : "agency";
+  const where = side === "bank" ? { bankId: u.orgId } : { agencyId: u.orgId };
+  const [agreements, invoices, orgs] = await Promise.all([
+    prisma.billingAgreement.findMany({ where }),
+    prisma.invoice.findMany({ where, include: { lines: true }, orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }] }),
+    prisma.organization.findMany({ select: { id: true, name: true, type: true } }),
+  ]);
+  const orgName = new Map(orgs.map((o) => [o.id, o.name]));
+  return {
+    side: side as "bank" | "agency",
+    agreements: agreements.map((a) => ({
+      bankId: a.bankId,
+      agencyId: a.agencyId,
+      bankName: orgName.get(a.bankId) ?? a.bankId,
+      agencyName: orgName.get(a.agencyId) ?? a.agencyId,
+      commissionPct: a.commissionPct,
+    })),
+    // Контрагенты, для которых банк ещё может задать ставку
+    counterparties:
+      side === "bank"
+        ? orgs.filter((o) => o.type === "COLLECTOR" || o.type === "LEGAL_FIRM").map((o) => ({ id: o.id, name: o.name }))
+        : orgs.filter((o) => o.type === "BANK" || o.type === "MFO").map((o) => ({ id: o.id, name: o.name })),
+    invoices: invoices.map((inv) => ({
+      id: inv.id,
+      number: inv.number,
+      bankId: inv.bankId,
+      agencyId: inv.agencyId,
+      bankName: orgName.get(inv.bankId) ?? inv.bankId,
+      agencyName: orgName.get(inv.agencyId) ?? inv.agencyId,
+      periodYear: inv.periodYear,
+      periodMonth: inv.periodMonth,
+      commissionPct: inv.commissionPct,
+      baseAmountUSD: inv.baseAmountUSD,
+      amountUSD: inv.amountUSD,
+      status: inv.status,
+      issuedAt: iso(inv.issuedAt),
+      paidAt: iso(inv.paidAt),
+      disputedAt: iso(inv.disputedAt),
+      disputeReason: inv.disputeReason,
+      lines: inv.lines.map((l) => ({ caseId: l.caseId, caseCode: l.caseCode, recoveredUSD: l.recoveredUSD, commissionUSD: l.commissionUSD })),
+    })),
+  };
+});
+
+// Агентство формирует (или пересформирует после спора) счёт за месяц.
+export const apiGenerateInvoice = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      bankId: z.string(),
+      periodYear: z.number().int().min(2020).max(2100),
+      periodMonth: z.number().int().min(1).max(12),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (!["MANAGER", "ACCOUNTANT"].includes(u.role))
+      forbid("Счёт формирует менеджер или бухгалтер исполнителя");
+    const org = await prisma.organization.findUnique({ where: { id: u.orgId } });
+    if (!org || (org.type !== "COLLECTOR" && org.type !== "LEGAL_FIRM"))
+      forbid("Счета выставляет коллекторское агентство или юрфирма");
+    const agreement = await prisma.billingAgreement.findUnique({
+      where: { bankId_agencyId: { bankId: data.bankId, agencyId: u.orgId } },
+    });
+    if (!agreement)
+      return { ok: false as const, error: "Банк ещё не задал ставку вознаграждения для вашей организации" };
+
+    const existing = await prisma.invoice.findUnique({
+      where: {
+        bankId_agencyId_periodYear_periodMonth: {
+          bankId: data.bankId, agencyId: u.orgId, periodYear: data.periodYear, periodMonth: data.periodMonth,
+        },
+      },
+    });
+    if (existing && (existing.status === "ISSUED" || existing.status === "PAID"))
+      return { ok: false as const, error: "Счёт за этот период уже выставлен — оспорить его может банк" };
+
+    const from = new Date(Date.UTC(data.periodYear, data.periodMonth - 1, 1));
+    const to = new Date(Date.UTC(data.periodYear, data.periodMonth, 1));
+    // База: платежи за период по делам этого банка, назначенным исполнителю.
+    // V1-допущение: атрибуция по текущему assignedOrgId дела (не историческому).
+    const payments = await prisma.payment.findMany({
+      where: {
+        kind: { in: ["FULL", "PARTIAL"] },
+        paidAt: { gte: from, lt: to },
+        case: { tenantBankId: data.bankId, assignedOrgId: u.orgId },
+      },
+      include: { case: { select: { id: true, code: true } } },
+    });
+    if (payments.length === 0)
+      return { ok: false as const, error: "За этот период нет зафиксированных платежей по делам этого банка" };
+
+    const byCase = new Map<string, { code: string; recovered: number }>();
+    for (const p of payments) {
+      const cur = byCase.get(p.case.id) ?? { code: p.case.code, recovered: 0 };
+      cur.recovered += p.amountUSD;
+      byCase.set(p.case.id, cur);
+    }
+    const base = [...byCase.values()].reduce((s, x) => s + x.recovered, 0);
+    const lines = [...byCase.entries()].map(([caseId, x]) => ({
+      caseId,
+      caseCode: x.code,
+      recoveredUSD: x.recovered,
+      commissionUSD: Math.floor((x.recovered * agreement.commissionPct) / 100),
+    }));
+    const amount = lines.reduce((s, l) => s + l.commissionUSD, 0);
+    const number = `INV-${data.periodYear}-${String(data.periodMonth).padStart(2, "0")}-${u.orgId.slice(-4).toUpperCase()}-${data.bankId.slice(-4).toUpperCase()}`;
+
+    const inv = await prisma.$transaction(async (tx) => {
+      if (existing) await tx.invoiceLine.deleteMany({ where: { invoiceId: existing.id } });
+      return tx.invoice.upsert({
+        where: {
+          bankId_agencyId_periodYear_periodMonth: {
+            bankId: data.bankId, agencyId: u.orgId, periodYear: data.periodYear, periodMonth: data.periodMonth,
+          },
+        },
+        update: {
+          commissionPct: agreement.commissionPct,
+          baseAmountUSD: base,
+          amountUSD: amount,
+          status: "DRAFT",
+          disputedAt: null,
+          disputeReason: null,
+          lines: { create: lines },
+        },
+        create: {
+          number,
+          bankId: data.bankId,
+          agencyId: u.orgId,
+          periodYear: data.periodYear,
+          periodMonth: data.periodMonth,
+          commissionPct: agreement.commissionPct,
+          baseAmountUSD: base,
+          amountUSD: amount,
+          lines: { create: lines },
+        },
+      });
+    });
+    logEvent("info", "invoice_generated", { invoiceId: inv.id, bankId: data.bankId, agencyId: u.orgId, amount });
+    return { ok: true as const, invoiceId: inv.id };
+  });
+
+// Бухгалтер исполнителя выставляет сформированный счёт банку.
+export const apiIssueInvoice = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ invoiceId: z.string() }))
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (!["MANAGER", "ACCOUNTANT"].includes(u.role)) forbid("Счёт выставляет менеджер или бухгалтер");
+    const inv = await prisma.invoice.findUnique({ where: { id: data.invoiceId } });
+    if (!inv || inv.agencyId !== u.orgId) forbid("Счёт не найден");
+    if (inv.status !== "DRAFT") return { ok: false as const, error: "Выставить можно только сформированный счёт" };
+    await prisma.invoice.update({ where: { id: inv.id }, data: { status: "ISSUED", issuedAt: new Date() } });
+    logEvent("info", "invoice_issued", { invoiceId: inv.id });
+    return { ok: true as const };
+  });
+
+// Банк подтверждает оплату либо оспаривает счёт.
+export const apiResolveInvoice = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      invoiceId: z.string(),
+      action: z.enum(["PAY", "DISPUTE"]),
+      reason: z.string().max(1000).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const u = await requireUserMutation();
+    if (!["BANK_ADMIN", "ACCOUNTANT"].includes(u.role))
+      forbid("Счёт подтверждает администратор банка или бухгалтер банка");
+    const inv = await prisma.invoice.findUnique({ where: { id: data.invoiceId } });
+    if (!inv || inv.bankId !== u.orgId) forbid("Счёт не найден");
+    if (inv.status !== "ISSUED")
+      return { ok: false as const, error: "Действие доступно только для выставленного счёта" };
+    if (data.action === "DISPUTE" && !data.reason?.trim())
+      return { ok: false as const, error: "Для оспаривания обязательна причина" };
+    await prisma.invoice.update({
+      where: { id: inv.id },
+      data:
+        data.action === "PAY"
+          ? { status: "PAID", paidAt: new Date() }
+          : { status: "DISPUTED", disputedAt: new Date(), disputeReason: data.reason },
+    });
+    logEvent("info", data.action === "PAY" ? "invoice_paid" : "invoice_disputed", { invoiceId: inv.id });
+    return { ok: true as const };
+  });
+
 // ——— Списание ———
 export const apiWriteOff = createServerFn({ method: "POST" })
   .inputValidator(z.object({ caseId: z.string(), reason: z.string().min(3).max(1000) }))
