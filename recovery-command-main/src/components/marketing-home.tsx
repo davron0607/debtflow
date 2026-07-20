@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Building2,
@@ -14,6 +13,10 @@ import {
   Wallet,
 } from "lucide-react";
 import { Logo, LogoMark } from "@/components/logo";
+
+// Вход/регистрация всегда ведут на прод-домен приложения, даже если сама
+// маркетинговая страница открыта на голом debtflow.uz.
+const APP_URL = "https://app.debtflow.uz";
 
 const AUDIENCES = [
   {
@@ -86,18 +89,16 @@ export function MarketingHome() {
             <a href="#how" className="hover:text-foreground">Как это работает</a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link
-              to="/login"
+            <a href={`${APP_URL}/login`}
               className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-accent"
             >
               Войти
-            </Link>
-            <Link
-              to="/register"
+            </a>
+            <a href={`${APP_URL}/register`}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               Регистрация организации
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -117,18 +118,16 @@ export function MarketingHome() {
               деле — с прозрачными переходами, ролевым доступом и неизменяемым аудитом каждого шага.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to="/register"
+              <a href={`${APP_URL}/register`}
                 className="flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90"
               >
                 Зарегистрировать организацию <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/login"
+              </a>
+              <a href={`${APP_URL}/login`}
                 className="flex items-center gap-2 rounded-md border border-sidebar-border px-5 py-3 text-sm font-medium hover:bg-sidebar-accent/40"
               >
                 У меня уже есть доступ
-              </Link>
+              </a>
             </div>
             <div className="mt-10 flex flex-wrap gap-x-8 gap-y-2 text-xs text-sidebar-foreground/60">
               <span>· Портфель → Назначение → Взыскание</span>
@@ -223,12 +222,11 @@ export function MarketingHome() {
               через Бюро принудительного исполнения, по решению суда или исполнительной надписи нотариуса.
             </p>
           </div>
-          <Link
-            to="/register"
+          <a href={`${APP_URL}/register`}
             className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             Начать работу <ArrowRight className="h-4 w-4" />
-          </Link>
+          </a>
         </div>
       </section>
 
@@ -237,8 +235,8 @@ export function MarketingHome() {
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <Logo size={22} />
           <div className="flex flex-wrap items-center gap-4">
-            <Link to="/login" className="hover:text-foreground">Вход</Link>
-            <Link to="/register" className="hover:text-foreground">Регистрация организации</Link>
+            <a href={`${APP_URL}/login`} className="hover:text-foreground">Вход</a>
+            <a href={`${APP_URL}/register`} className="hover:text-foreground">Регистрация организации</a>
           </div>
         </div>
         <div className="mt-4 border-t border-border pt-4">
