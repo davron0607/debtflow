@@ -38,12 +38,12 @@ function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-8 shadow-sm">
-        <div className="mb-6 flex items-center gap-2.5">
+        <Link to="/" className="mb-6 flex items-center gap-2.5 transition-opacity hover:opacity-80">
           <LogoMark size={32} />
           <span className="font-display text-lg font-bold">
             Debt<span style={{ color: "#3E8E41" }}>Flow</span>
           </span>
-        </div>
+        </Link>
 
         {sent ? (
           <div>

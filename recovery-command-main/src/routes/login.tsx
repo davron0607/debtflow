@@ -34,7 +34,7 @@ function LoginPage() {
       <div className="w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-surface shadow-sm lg:grid lg:grid-cols-5">
         {/* Brand panel */}
         <div className="bg-sidebar p-8 text-sidebar-foreground lg:col-span-2">
-          <div className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
             <div className="rounded-lg bg-white p-1.5">
               <LogoMark size={36} />
             </div>
@@ -46,7 +46,7 @@ function LoginPage() {
                 debtflow.uz
               </div>
             </div>
-          </div>
+          </Link>
           <h1 className="mt-8 font-display text-2xl font-bold">
             Единая операционная система взыскания
           </h1>
