@@ -105,7 +105,7 @@ function RegisterPage() {
                     required
                     value={orgDomain}
                     onChange={(e) => setOrgDomain(e.target.value)}
-                    placeholder="tengebank.uz"
+                    placeholder="yourbank.uz"
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2"
                   />
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
@@ -123,7 +123,15 @@ function RegisterPage() {
                   required
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
-                  placeholder='КА "Взыскание Плюс"'
+                  placeholder={
+                    orgType === "BANK"
+                      ? "АКБ «Пример Банк»"
+                      : orgType === "MFO"
+                        ? 'МФО "Пример Кредит"'
+                        : orgType === "LEGAL_FIRM"
+                          ? 'ЮФ "Пример и партнёры"'
+                          : 'КА "Взыскание Плюс"'
+                  }
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2"
                 />
               </div>
