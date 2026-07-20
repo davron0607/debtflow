@@ -2,7 +2,7 @@ import { createFileRoute, Link, Navigate, useRouter } from "@tanstack/react-rout
 import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { LogoMark } from "@/components/logo";
-import { useStore, DEMO_PASSWORD } from "@/lib/store/store";
+import { useStore } from "@/lib/store/store";
 import { apiResendVerification } from "@/lib/api";
 
 export const Route = createFileRoute("/login")({
@@ -28,19 +28,6 @@ function LoginPage() {
     }
     router.navigate({ to: "/" });
   };
-
-  // Демо-учётки (пароль demo123) — список статический: до входа сервер
-  // не раскрывает пользователей
-  const demoUsers = [
-    { email: "ops@debtflow.uz", label: "Оператор платформы", org: "DebtFlow" },
-    { email: "admin@tengebank.uz", label: "Администратор банка", org: "Tenge Bank" },
-    { email: "legal@tengebank.uz", label: "Юрист банка", org: "Tenge Bank" },
-    { email: "aziz@alpha-collect.uz", label: "Коллектор", org: 'КА "Альфа-Взыскание"' },
-    { email: "sevara@alpha-collect.uz", label: "Менеджер", org: 'КА "Альфа-Взыскание"' },
-    { email: "bekzod@alpha-collect.uz", label: "Бухгалтер", org: 'КА "Альфа-Взыскание"' },
-    { email: "ulugbek@beta-resource.uz", label: "Коллектор", org: 'КА "Бета-Ресурс"' },
-    { email: "n.saidova@lex.uz", label: "Юрист", org: 'ЮФ "Lex Partners"' },
-  ];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -149,31 +136,6 @@ function LoginPage() {
               </Link>
             </div>
           </form>
-
-          <div className="mt-8">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Демо-доступ (пароль у всех: <span className="font-mono">{DEMO_PASSWORD}</span>)
-            </div>
-            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              {demoUsers.map((u) => (
-                <button
-                  key={u.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(u.email);
-                    setPassword(DEMO_PASSWORD);
-                    setError(null);
-                  }}
-                  className="rounded-md border border-border bg-background px-3 py-2 text-left text-xs transition-colors hover:border-primary hover:bg-accent"
-                >
-                  <div className="font-medium">{u.label}</div>
-                  <div className="text-muted-foreground">
-                    {u.email} · {u.org}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>
